@@ -1,0 +1,385 @@
+/* ---------------------------------------------------------------
+   Moog Grandmother inspired panel: light golden-oak end cheeks, a
+   cream control surface, Moog-red-orange accent, knurled dark knobs
+   with a cream pointer line. Shared theme with the sibling
+   Oscilloscope Visualizer project.
+   --------------------------------------------------------------- */
+:root {
+  --wood-dark: #4a3319;
+  --wood-mid: #8a6239;
+  --wood-light: #c9a06a;
+  --panel: #e7e0cd;
+  --panel-card: #f2ecdd;
+  --panel-border: #c3b89c;
+  --ink: #2b2620;
+  --ink-dim: #7a7160;
+  --orange: #d8481f;
+  --orange-bright: #f2793f;
+  --knob: #1c1a17;
+  --knob-face: #4a4844;
+  --knob-indicator: #f2ecdd;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: auto;
+}
+
+#app {
+  width: 1928px;
+  height: 1028px;
+  display: flex;
+  padding: 14px;
+  background:
+    repeating-linear-gradient(100deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 5px),
+    linear-gradient(90deg, var(--wood-dark), var(--wood-light) 12%, var(--wood-mid) 50%, var(--wood-light) 88%, var(--wood-dark));
+}
+
+#stage {
+  width: 1000px;
+  height: 1000px;
+  flex: 0 0 1000px;
+  background: #000;
+  border: 3px solid var(--knob);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #000, 0 0 0 1px rgba(0,0,0,0.5);
+  margin-right: 14px;
+}
+
+#gl {
+  width: 1000px;
+  height: 1000px;
+  display: block;
+  background: #000;
+}
+
+#panel {
+  flex: 1 1 auto;
+  width: 900px;
+  height: 1000px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 3px solid var(--knob);
+  border-radius: 3px;
+  padding: 14px 18px 40px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+#panel::-webkit-scrollbar { width: 10px; }
+#panel::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
+#panel::-webkit-scrollbar-track { background: var(--panel); }
+
+.panel-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--panel-border);
+}
+
+.panel-header h1 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  margin: 0;
+}
+
+.header-actions { display: flex; gap: 8px; }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid #a89f8a;
+  background: linear-gradient(#f8f4e9, #ddd4b8);
+  color: var(--ink);
+  border-radius: 4px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.25);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+button:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
+
+.wide-btn {
+  background: linear-gradient(#f8f4e9, #ddd4b8);
+  border-color: #a89f8a;
+  color: var(--ink);
+}
+.wide-btn:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
+.wide-btn.active {
+  background: linear-gradient(var(--orange-bright), var(--orange));
+  border-color: #000;
+  color: #fff6ec;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 6px rgba(216,72,31,0.5);
+}
+.wide-btn.ghost {
+  background: #efe8d5;
+  color: var(--ink-dim);
+  border-color: #c3b89c;
+  font-weight: 700;
+}
+.wide-btn.ghost:hover { color: var(--ink); background: #f5efdd; }
+
+fieldset.group {
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  margin: 0;
+  height: fit-content;
+  padding: 10px 14px 14px;
+  background: var(--panel-card);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.12);
+}
+
+fieldset.group legend {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+}
+
+.subhead {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+  margin: 10px 0 4px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.row label {
+  flex: 0 0 96px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.readout {
+  flex: 0 0 52px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------
+   Generator "fields": Moog Grandmother-style flat color panels that
+   visually separate each generator type's own parameters (oscillator
+   knobs on gold, noise on lavender, etc.) inside the single Generator
+   fieldset, the way the real hardware tints whole panel sections
+   rather than just outlining groups.
+   --------------------------------------------------------------- */
+.gen-field {
+  border-radius: 4px;
+  padding: 8px 10px 2px;
+  margin: 8px 0;
+}
+
+.gen-field .row { margin: 5px 0 7px; }
+
+.gen-field-label {
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+
+.gen-field-camera { background: #bcd8d3; }
+.gen-field-osc { background: #e8d9a0; }
+.gen-field-noise { background: #cdc3e0; }
+.gen-field-shape { background: #e3b9ab; }
+.gen-field-solid { background: #c3d9b0; }
+
+.gl-error {
+  grid-column: 1 / -1;
+  padding: 14px;
+  background: #f6d9d3;
+  border: 1px solid var(--orange);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------
+   Knob controls: every numeric param and every dropdown is a rotary
+   knob. Same visual language as the sibling Oscilloscope Visualizer,
+   but driven directly off a plain params object here (see
+   createKnobRow/createSelectKnobRow in script.js) rather than
+   shadowing native <input>/<select> elements.
+   --------------------------------------------------------------- */
+.knob-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+}
+
+.knob-dial {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--knob-face), var(--knob) 75%);
+  border: 1px solid #000;
+  box-shadow: 0 0 0 2px rgba(216,72,31,0.35), 0 1px 3px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.15);
+  position: relative;
+  flex: none;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: var(--knob-indicator);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.knob-dial.has-notch::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 2px;
+  height: 5px;
+  background: var(--orange);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.knob-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--knob);
+  color: var(--knob-indicator);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+}
+
+.knob-select {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+
+.knob-readout {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--orange);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-actions button {
+  flex: 1 1 0;
+}
+
+.preset-list {
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: #efe8d5;
+}
+
+.preset-list::-webkit-scrollbar { width: 8px; }
+.preset-list::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
+.preset-list::-webkit-scrollbar-track { background: #efe8d5; }
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--panel-border);
+  cursor: pointer;
+}
+.preset-item:last-child { border-bottom: none; }
+.preset-item:hover { background: #e2d9bd; }
+
+.preset-item .preset-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-item .preset-delete {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 2px;
+  box-shadow: none;
+}
+.preset-item .preset-delete:hover { color: var(--orange); }
+
+.preset-empty {
+  padding: 10px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-dim);
+}

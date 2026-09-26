@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Video Feedback Visualizer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="gl" width="1000" height="1000"></canvas>
+  </div>
+
+  <div id="panel">
+    <div class="panel-header">
+      <h1>Video Feedback Visualizer</h1>
+      <div class="header-actions">
+        <button id="pauseBtn" class="wide-btn ghost">Pause Time</button>
+        <button id="freezeBtn" class="wide-btn ghost">Freeze</button>
+        <button id="resetBtn" class="wide-btn ghost">Reset</button>
+      </div>
+    </div>
+
+    <fieldset class="group" id="feedbackGroup"><legend>Feedback</legend></fieldset>
+    <fieldset class="group" id="generatorGroup"><legend>Generator</legend></fieldset>
+    <fieldset class="group" id="colorGroup"><legend>Color</legend></fieldset>
+    <fieldset class="group" id="chromakeyGroup"><legend>Chromakey</legend></fieldset>
+    <fieldset class="group" id="blendGroup"><legend>Blend</legend></fieldset>
+
+    <fieldset class="group" id="presetsSection">
+      <legend>Presets</legend>
+      <div class="row preset-actions">
+        <button id="savePresetBtn" class="wide-btn ghost" type="button">Save</button>
+        <button id="randomizeBtn" class="wide-btn ghost" type="button">Randomize</button>
+      </div>
+      <div id="presetList" class="preset-list"></div>
+    </fieldset>
+  </div>
+</div>
+<script src="script.js"></script>
+</body>
+</html>

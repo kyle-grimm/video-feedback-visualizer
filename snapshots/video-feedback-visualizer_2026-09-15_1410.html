@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Video Feedback Visualizer</title>
+<style>
+/* ---------------------------------------------------------------
+   Moog Grandmother inspired panel: light golden-oak end cheeks, a
+   cream control surface, Moog-red-orange accent, knurled dark knobs
+   with a cream pointer line. Shared theme with the sibling
+   Oscilloscope Visualizer project.
+   --------------------------------------------------------------- */
+:root {
+  --wood-dark: #4a3319;
+  --wood-mid: #8a6239;
+  --wood-light: #c9a06a;
+  --panel: #e7e0cd;
+  --panel-card: #f2ecdd;
+  --panel-border: #c3b89c;
+  --ink: #2b2620;
+  --ink-dim: #7a7160;
+  --orange: #d8481f;
+  --orange-bright: #f2793f;
+  --knob: #1c1a17;
+  --knob-face: #4a4844;
+  --knob-indicator: #f2ecdd;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+  color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: auto;
+}
+
+#app {
+  width: 1928px;
+  height: 1028px;
+  display: flex;
+  padding: 14px;
+  background:
+    repeating-linear-gradient(100deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 5px),
+    linear-gradient(90deg, var(--wood-dark), var(--wood-light) 12%, var(--wood-mid) 50%, var(--wood-light) 88%, var(--wood-dark));
+}
+
+#stage {
+  width: 1000px;
+  height: 1000px;
+  flex: 0 0 1000px;
+  background: #000;
+  border: 3px solid var(--knob);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px #000, 0 0 0 1px rgba(0,0,0,0.5);
+  margin-right: 14px;
+}
+
+#gl {
+  width: 1000px;
+  height: 1000px;
+  display: block;
+  background: #000;
+}
+
+#panel {
+  flex: 1 1 auto;
+  width: 900px;
+  height: 1000px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 3px solid var(--knob);
+  border-radius: 3px;
+  padding: 14px 18px 40px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+
+#panel::-webkit-scrollbar { width: 10px; }
+#panel::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
+#panel::-webkit-scrollbar-track { background: var(--panel); }
+
+.panel-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--panel-border);
+}
+
+.panel-header h1 {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  margin: 0;
+}
+
+.header-actions { display: flex; gap: 8px; }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid #a89f8a;
+  background: linear-gradient(#f8f4e9, #ddd4b8);
+  color: var(--ink);
+  border-radius: 4px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.25);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+button:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
+
+.wide-btn {
+  background: linear-gradient(#f8f4e9, #ddd4b8);
+  border-color: #a89f8a;
+  color: var(--ink);
+}
+.wide-btn:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
+.wide-btn.active {
+  background: linear-gradient(var(--orange-bright), var(--orange));
+  border-color: #000;
+  color: #fff6ec;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 6px rgba(216,72,31,0.5);
+}
+.wide-btn.ghost {
+  background: #efe8d5;
+  color: var(--ink-dim);
+  border-color: #c3b89c;
+  font-weight: 700;
+}
+.wide-btn.ghost:hover { color: var(--ink); background: #f5efdd; }
+
+fieldset.group {
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  margin: 0;
+  height: fit-content;
+  padding: 10px 14px 14px;
+  background: var(--panel-card);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.12);
+}
+
+fieldset.group legend {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+}
+
+.subhead {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-dim);
+  margin: 10px 0 4px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.row label {
+  flex: 0 0 96px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.readout {
+  flex: 0 0 52px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--orange);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.gl-error {
+  grid-column: 1 / -1;
+  padding: 14px;
+  background: #f6d9d3;
+  border: 1px solid var(--orange);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------
+   Knob controls: every numeric param and every dropdown is a rotary
+   knob. Same visual language as the sibling Oscilloscope Visualizer,
+   but driven directly off a plain params object here (see
+   createKnobRow/createSelectKnobRow in script.js) rather than
+   shadowing native <input>/<select> elements.
+   --------------------------------------------------------------- */
+.knob-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+}
+
+.knob-dial {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--knob-face), var(--knob) 75%);
+  border: 1px solid #000;
+  box-shadow: 0 0 0 2px rgba(216,72,31,0.35), 0 1px 3px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.15);
+  position: relative;
+  flex: none;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.knob-indicator {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: var(--knob-indicator);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.knob-dial.has-notch::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 2px;
+  height: 5px;
+  background: var(--orange);
+  transform: translateX(-50%);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.knob-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--knob);
+  color: var(--knob-indicator);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+}
+
+.knob-select {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+
+.knob-readout {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--orange);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-actions button {
+  flex: 1 1 0;
+}
+
+.preset-list {
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  background: #efe8d5;
+}
+
+.preset-list::-webkit-scrollbar { width: 8px; }
+.preset-list::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
+.preset-list::-webkit-scrollbar-track { background: #efe8d5; }
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--panel-border);
+  cursor: pointer;
+}
+.preset-item:last-child { border-bottom: none; }
+.preset-item:hover { background: #e2d9bd; }
+
+.preset-item .preset-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-item .preset-delete {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 2px;
+  box-shadow: none;
+}
+.preset-item .preset-delete:hover { color: var(--orange); }
+
+.preset-empty {
+  padding: 10px;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-dim);
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="gl" width="1000" height="1000"></canvas>
+  </div>
+
+  <div id="panel">
+    <div class="panel-header">
+      <h1>Video Feedback Visualizer</h1>
+      <div class="header-actions">
+        <button id="pauseBtn" class="wide-btn ghost">Pause Time</button>
+        <button id="freezeBtn" class="wide-btn ghost">Freeze</button>
+        <button id="resetBtn" class="wide-btn ghost">Reset</button>
+      </div>
+    </div>
+
+    <fieldset class="group" id="feedbackGroup"><legend>Feedback</legend></fieldset>
+    <fieldset class="group" id="generatorGroup"><legend>Generator</legend></fieldset>
+    <fieldset class="group" id="transformGroup"><legend>Transform</legend></fieldset>
+    <fieldset class="group" id="colorGroup"><legend>Color</legend></fieldset>
+    <fieldset class="group" id="blendGroup"><legend>Blend</legend></fieldset>
+    <fieldset class="group" id="postfxGroup"><legend>Post FX</legend></fieldset>
+
+    <fieldset class="group" id="presetsSection">
+      <legend>Presets</legend>
+      <div class="row preset-actions">
+        <button id="savePresetBtn" class="wide-btn ghost" type="button">Save</button>
+        <button id="randomizeBtn" class="wide-btn ghost" type="button">Randomize</button>
+      </div>
+      <div id="presetList" class="preset-list"></div>
+    </fieldset>
+  </div>
+</div>
+<script>
+'use strict';
+
+// ===================================================================
+// Video Feedback Visualizer
+// See DESIGN.md for the full design (ping-pong framebuffer technique,
+// GLSL formula reference, pipeline order, non-goals for v1).
+//
+// File is organized top-to-bottom as:
+//   1. WebGL2 boilerplate (context, shader/program compile helpers)
+//   2. Ping-pong framebuffer management
+//   3. GLSL source (vertex, feedback fragment, display fragment)
+//   4. Parameter state + defaults
+//   5. Knob widgets (generic, bound directly to the params object)
+//   6. Control panel construction
+//   7. Uniform upload + render loop
+//   8. Header actions (pause/freeze/reset), presets, randomize
+// ===================================================================
+
+const canvas = document.getElementById('gl');
+const panel = document.getElementById('panel');
+const W = canvas.width, H = canvas.height;
+
+const gl = canvas.getContext('webgl2');
+if (!gl) {
+  const err = document.createElement('div');
+  err.className = 'gl-error';
+  err.textContent = 'WebGL2 is not available in this browser, so the visualizer cannot run here.';
+  panel.prepend(err);
+  throw new Error('WebGL2 not available');
+}
+
+// -------------------------------------------------------------
+// 1. WebGL2 boilerplate
+// -------------------------------------------------------------
+function compileShader(type, source) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, source);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const info = gl.getShaderInfoLog(sh);
+    gl.deleteShader(sh);
+    throw new Error(`Shader compile error:\n${info}\n---\n${source}`);
+  }
+  return sh;
+}
+
+function linkProgram(vsSource, fsSource) {
+  const vs = compileShader(gl.VERTEX_SHADER, vsSource);
+  const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const info = gl.getProgramInfoLog(prog);
+    throw new Error(`Program link error:\n${info}`);
+  }
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+  return prog;
+}
+
+function uniformLocations(prog, names) {
+  const locs = {};
+  for (const name of names) locs[name] = gl.getUniformLocation(prog, name);
+  return locs;
+}
+
+// A full-screen triangle needs no vertex buffer at all - positions are
+// computed from gl_VertexID in the vertex shader. WebGL2 always has a
+// default vertex array object bound, so drawArrays(TRIANGLES, 0, 3)
+// with zero attributes just works.
+function drawFullscreenTriangle() {
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+// -------------------------------------------------------------
+// 2. Ping-pong framebuffers
+//
+// Feedback (reading "last frame" while writing "this frame") needs two
+// framebuffers, alternated every frame via a flipping index - see
+// DESIGN.md section 2. Two RGBA8 color textures, no depth/stencil
+// (this is a pure 2D compositor).
+// -------------------------------------------------------------
+function createFBO(w, h) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { fbo, tex };
+}
+
+function clearFBO(target) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+let buffers = [createFBO(W, H), createFBO(W, H)];
+let pingIndex = 0;
+clearFBO(buffers[0]);
+clearFBO(buffers[1]);
+
+// -------------------------------------------------------------
+// 3. GLSL source
+// -------------------------------------------------------------
+const VERTEX_SRC = `#version 300 es
+out vec2 v_uv;
+void main() {
+  vec2 pos[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+  vec2 p = pos[gl_VertexID];
+  v_uv = p * 0.5 + 0.5;
+  gl_Position = vec4(p, 0.0, 1.0);
+}`;
+
+// 2D simplex noise - standard public implementation (Ian McEwan /
+// Stefan Gustavson, MIT-licensed webgl-noise), reused as-is since it's
+// the common-knowledge reference implementation rather than anything
+// specific to Hydra.
+const SIMPLEX_NOISE_GLSL = `
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x * 34.0) + 1.0) * x); }
+float snoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                      -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod289(i);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+  m = m * m;
+  m = m * m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}`;
+
+// Transform / color / blend / modulate math restated from hydra-synth's
+// glsl-functions.js (MIT license, see DESIGN.md section 5) as explicit
+// named GLSL functions - not Hydra's implicit-argument macro system.
+const FEEDBACK_FRAGMENT_SRC = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_prevFrame;
+uniform vec2  u_resolution;
+uniform float u_time;
+
+// feedback
+uniform float u_feedback;
+uniform float u_zoom;
+uniform float u_rotate;
+uniform vec2  u_translate;
+uniform float u_hueDrift;
+
+// generator
+uniform int   u_genType; // 0 osc, 1 noise, 2 shape, 3 gradient, 4 solid
+uniform float u_frequency;
+uniform float u_speed;
+uniform float u_sync;
+uniform float u_shapeSides;
+uniform float u_shapeSmoothing;
+uniform float u_noiseScale;
+uniform vec3  u_solidColor;
+
+// transform
+uniform float u_kaleidSides;
+uniform float u_pixelate;
+uniform float u_mirror;
+
+// color
+uniform float u_hue;
+uniform float u_saturate;
+uniform float u_contrast;
+uniform float u_posterizeBins;
+uniform float u_invertAmount;
+
+// blend
+uniform int   u_blendMode; // 0 mix, 1 add, 2 mult, 3 diff
+uniform float u_modulateAmount;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+${SIMPLEX_NOISE_GLSL}
+
+vec2 rotateUV(vec2 st, float angle) {
+  vec2 xy = st - 0.5;
+  float c = cos(angle), s = sin(angle);
+  xy = mat2(c, -s, s, c) * xy;
+  return xy + 0.5;
+}
+
+vec2 scaleUV(vec2 st, float amount, vec2 offset) {
+  vec2 xy = st - offset;
+  xy *= 1.0 / max(amount, 0.0001);
+  return xy + offset;
+}
+
+vec2 kaleidUV(vec2 st, float nSides) {
+  vec2 c = st - 0.5;
+  float r = length(c);
+  float a = atan(c.y, c.x);
+  float pi2 = 6.28318530718;
+  a = mod(a, pi2 / nSides);
+  a = abs(a - pi2 / nSides * 0.5);
+  return r * vec2(cos(a), sin(a)) + 0.5;
+}
+
+vec2 pixelateUV(vec2 st, vec2 pixels) {
+  return (floor(st * pixels) + 0.5) / pixels;
+}
+
+vec3 rgb2hsv(vec3 c) {
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 hueRotate(vec3 rgb, float hue) {
+  vec3 hsv = rgb2hsv(clamp(rgb, 0.0, 1.0));
+  hsv.x = fract(hsv.x + hue);
+  return hsv2rgb(hsv);
+}
+
+vec3 saturateColor(vec3 c, float amount) {
+  const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+  vec3 gray = vec3(dot(c, W));
+  return mix(gray, c, amount);
+}
+
+vec3 contrastColor(vec3 c, float amount) { return (c - 0.5) * amount + 0.5; }
+
+vec3 posterizeColor(vec3 c, float bins) {
+  vec3 p = clamp(c, 0.0, 1.0);
+  p = floor(p * bins) / bins;
+  return p;
+}
+
+vec3 invertColor(vec3 c, float amount) { return (1.0 - c) * amount + c * (1.0 - amount); }
+
+vec2 modulateUV(vec2 st, vec4 b, float amount) { return st + b.xy * amount; }
+
+vec4 blendFn(vec4 prev, vec4 gen, int mode, float feedback) {
+  if (mode == 1) return vec4(prev.rgb * feedback + gen.rgb, 1.0);
+  if (mode == 2) return vec4(mix(gen.rgb, prev.rgb * gen.rgb, feedback), 1.0);
+  if (mode == 3) return vec4(mix(gen.rgb, abs(prev.rgb - gen.rgb), feedback), 1.0);
+  return vec4(mix(gen.rgb, prev.rgb, feedback), 1.0);
+}
+
+vec4 genOsc(vec2 st) {
+  float phase = u_time * u_speed;
+  float r = sin((st.x * u_frequency + phase) * 6.28318530718) * 0.5 + 0.5;
+  float g = sin((st.x * u_frequency + phase + u_sync) * 6.28318530718) * 0.5 + 0.5;
+  float b = sin((st.x * u_frequency + phase + u_sync * 2.0) * 6.28318530718) * 0.5 + 0.5;
+  return vec4(r, g, b, 1.0);
+}
+
+vec4 genNoise(vec2 st) {
+  vec2 p = st * u_noiseScale;
+  float t = u_time * u_speed;
+  float nr = snoise(p + vec2(t, 0.0)) * 0.5 + 0.5;
+  float ng = snoise(p + vec2(0.0, t) + 5.2) * 0.5 + 0.5;
+  float nb = snoise(p + vec2(t * 0.7, t * 0.3) + 9.7) * 0.5 + 0.5;
+  return vec4(nr, ng, nb, 1.0);
+}
+
+vec4 genShape(vec2 st) {
+  vec2 c = st - 0.5;
+  float a = atan(c.x, c.y) + 3.14159265359;
+  float r = 6.28318530718 / max(u_shapeSides, 3.0);
+  float d = cos(floor(0.5 + a / r) * r - a) * length(c);
+  float s = smoothstep(0.3, 0.3 - max(u_shapeSmoothing, 0.001), d);
+  return vec4(vec3(s), 1.0);
+}
+
+vec4 genGradient(vec2 st) {
+  float hue = fract(st.x + st.y * 0.5 + u_time * u_speed);
+  return vec4(hsv2rgb(vec3(hue, 1.0, 1.0)), 1.0);
+}
+
+vec4 generate(vec2 st) {
+  if (u_genType == 1) return genNoise(st);
+  if (u_genType == 2) return genShape(st);
+  if (u_genType == 3) return genGradient(st);
+  if (u_genType == 4) return vec4(u_solidColor, 1.0);
+  return genOsc(st);
+}
+
+void main() {
+  vec2 uv = v_uv;
+
+  // Transform chain (applies to both the fresh generator and the
+  // feedback-read geometry, so kaleid/pixelate/mirror warp the whole
+  // composited image, not just this frame's new layer).
+  vec2 shaped = uv;
+  if (u_kaleidSides >= 1.5) shaped = kaleidUV(shaped, u_kaleidSides);
+  if (u_pixelate >= 1.5) shaped = pixelateUV(shaped, vec2(u_pixelate));
+  if (u_mirror >= 0.5) shaped.x = abs(shaped.x - 0.5) * 2.0;
+
+  vec4 gen = generate(shaped);
+  gen.rgb = hueRotate(gen.rgb, u_hue);
+
+  // Feedback read: rotate/zoom/translate a little further from last
+  // frame's image each frame - this is the actual "video feedback" step.
+  vec2 fbUV = shaped;
+  fbUV = rotateUV(fbUV, u_rotate);
+  fbUV = scaleUV(fbUV, u_zoom, vec2(0.5));
+  fbUV += u_translate;
+  if (u_modulateAmount > 0.0001) fbUV = modulateUV(fbUV, gen, u_modulateAmount);
+
+  vec4 prev = texture(u_prevFrame, fract(fbUV));
+  prev.rgb = hueRotate(prev.rgb, u_hueDrift);
+
+  vec4 result = blendFn(prev, gen, u_blendMode, u_feedback);
+
+  result.rgb = saturateColor(result.rgb, u_saturate);
+  result.rgb = contrastColor(result.rgb, u_contrast);
+  if (u_posterizeBins >= 1.5) result.rgb = posterizeColor(result.rgb, u_posterizeBins);
+  result.rgb = invertColor(result.rgb, u_invertAmount);
+  result.rgb = clamp(result.rgb, 0.0, 1.0);
+  result.a = 1.0;
+
+  fragColor = result;
+}`;
+
+const DISPLAY_FRAGMENT_SRC = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_frame;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform float u_chromaOffset;
+uniform float u_scanlineAmount;
+uniform float u_vignetteAmount;
+uniform float u_grainAmount;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+
+void main() {
+  vec2 uv = v_uv;
+
+  vec3 col;
+  col.r = texture(u_frame, uv + vec2(u_chromaOffset, 0.0)).r;
+  col.g = texture(u_frame, uv).g;
+  col.b = texture(u_frame, uv - vec2(u_chromaOffset, 0.0)).b;
+
+  float scan = sin(uv.y * u_resolution.y * 3.14159265) * 0.5 + 0.5;
+  col *= mix(1.0, mix(0.82, 1.0, scan), u_scanlineAmount);
+
+  float vig = smoothstep(0.95, 0.25, length(uv - 0.5));
+  col *= mix(1.0, vig, u_vignetteAmount);
+
+  float grain = (hash(uv * u_resolution.xy + u_time) - 0.5) * u_grainAmount;
+  col += grain;
+
+  fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+const feedbackProgram = linkProgram(VERTEX_SRC, FEEDBACK_FRAGMENT_SRC);
+const displayProgram = linkProgram(VERTEX_SRC, DISPLAY_FRAGMENT_SRC);
+
+const feedbackUniforms = uniformLocations(feedbackProgram, [
+  'u_prevFrame', 'u_resolution', 'u_time',
+  'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
+  'u_genType', 'u_frequency', 'u_speed', 'u_sync', 'u_shapeSides', 'u_shapeSmoothing',
+  'u_noiseScale', 'u_solidColor',
+  'u_kaleidSides', 'u_pixelate', 'u_mirror',
+  'u_hue', 'u_saturate', 'u_contrast', 'u_posterizeBins', 'u_invertAmount',
+  'u_blendMode', 'u_modulateAmount',
+]);
+const displayUniforms = uniformLocations(displayProgram, [
+  'u_frame', 'u_resolution', 'u_time',
+  'u_chromaOffset', 'u_scanlineAmount', 'u_vignetteAmount', 'u_grainAmount',
+]);
+
+// -------------------------------------------------------------
+// 4. Parameter state + defaults
+// -------------------------------------------------------------
+const GEN_TYPES = ['osc', 'noise', 'shape', 'gradient', 'solid'];
+const BLEND_MODES = ['mix', 'add', 'mult', 'diff'];
+
+const DEFAULTS = {
+  feedback: 0.94, zoom: 1.012, rotate: 0.012, translateX: 0.0, translateY: 0.0, hueDrift: 0.01,
+  genType: 'osc', frequency: 8, speed: 0.3, sync: 0.2,
+  shapeSides: 5, shapeSmoothing: 0.05, noiseScale: 4,
+  solidR: 1.0, solidG: 0.4, solidB: 0.1,
+  kaleidSides: 0, pixelate: 0, mirror: 0,
+  hue: 0.0, saturate: 1.1, contrast: 1.03, posterizeBins: 0, invertAmount: 0,
+  blendMode: 'mix', modulateAmount: 0.15,
+  chromaOffset: 0.0015, scanlineAmount: 0.12, vignetteAmount: 0.35, grainAmount: 0.03,
+};
+const params = { ...DEFAULTS };
+
+// -------------------------------------------------------------
+// 5. Knob widgets - bound directly to `params[key]`, no hidden native
+// inputs to shadow (unlike the sibling oscilloscope app, there's no
+// native form control this project needs to stay compatible with).
+// -------------------------------------------------------------
+const KNOB_ANGLE_MIN = -132;
+const KNOB_ANGLE_MAX = 132;
+const KNOB_FULL_SWEEP_PX = 220;
+const KNOB_OPTION_STEP_PX = 18;
+const FINE_DRAG_FACTOR = 0.1;
+
+const knobControls = []; // { render } - called after any programmatic param change
+const registry = {};     // key -> { min, max, step } | { options }
+
+function createKnobTooltip(dial) {
+  const tip = document.createElement('div');
+  tip.className = 'knob-tooltip';
+  tip.style.display = 'none';
+  dial.appendChild(tip);
+  return {
+    show(text) { tip.textContent = text; tip.style.display = 'block'; },
+    update(text) { tip.textContent = text; },
+    hide() { tip.style.display = 'none'; },
+  };
+}
+
+function defaultFormat(v, step) {
+  if (step >= 1) return String(Math.round(v));
+  return v.toFixed(step >= 0.01 ? 2 : 3);
+}
+
+function createKnobRow(parent, { key, label, min, max, step, format, snapZero }) {
+  registry[key] = { type: 'value', min, max, step };
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  const lab = document.createElement('label');
+  lab.textContent = label;
+  row.appendChild(lab);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'knob-wrap';
+  const dial = document.createElement('div');
+  dial.className = 'knob-dial' + (snapZero ? ' has-notch' : '');
+  const indicator = document.createElement('div');
+  indicator.className = 'knob-indicator';
+  dial.appendChild(indicator);
+  wrap.appendChild(dial);
+  row.appendChild(wrap);
+
+  const readout = document.createElement('div');
+  readout.className = 'readout';
+  row.appendChild(readout);
+  parent.appendChild(row);
+
+  const tooltip = createKnobTooltip(dial);
+  const fmt = format || ((v) => defaultFormat(v, step));
+
+  function render() {
+    const frac = max > min ? (params[key] - min) / (max - min) : 0;
+    dial.style.transform = `rotate(${KNOB_ANGLE_MIN + frac * (KNOB_ANGLE_MAX - KNOB_ANGLE_MIN)}deg)`;
+    readout.textContent = fmt(params[key]);
+  }
+  render();
+
+  const snapWindow = (max - min) * 0.035;
+  function setValue(v) {
+    v = Math.round(Math.min(max, Math.max(min, v)) / step) * step;
+    if (snapZero && Math.abs(v) < snapWindow) v = 0;
+    params[key] = v;
+    render();
+  }
+
+  let dragging = false, startY = 0, startVal = 0, fine = false;
+  dial.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startVal = params[key];
+    fine = e.shiftKey;
+    dial.setPointerCapture(e.pointerId);
+    tooltip.show(readout.textContent);
+    e.preventDefault();
+  });
+  dial.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const sensitivity = fine ? FINE_DRAG_FACTOR : 1;
+    setValue(startVal + ((startY - e.clientY) / KNOB_FULL_SWEEP_PX) * (max - min) * sensitivity);
+    tooltip.update(readout.textContent);
+  });
+  dial.addEventListener('pointerup', (e) => {
+    dragging = false;
+    tooltip.hide();
+    try { dial.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+  });
+  dial.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    setValue(params[key] + (e.deltaY < 0 ? step : -step));
+  }, { passive: false });
+
+  const control = { render };
+  knobControls.push(control);
+  return control;
+}
+
+function createSelectKnobRow(parent, { key, label, options }) {
+  registry[key] = { type: 'select', options };
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  const lab = document.createElement('label');
+  lab.textContent = label;
+  row.appendChild(lab);
+
+  const selWrap = document.createElement('div');
+  selWrap.className = 'knob-select';
+  const dial = document.createElement('div');
+  dial.className = 'knob-dial';
+  const indicator = document.createElement('div');
+  indicator.className = 'knob-indicator';
+  dial.appendChild(indicator);
+  const readout = document.createElement('div');
+  readout.className = 'knob-readout';
+  selWrap.appendChild(dial);
+  selWrap.appendChild(readout);
+  row.appendChild(selWrap);
+  parent.appendChild(row);
+
+  const tooltip = createKnobTooltip(dial);
+
+  function currentIndex() {
+    const i = options.findIndex((o) => o.value === params[key]);
+    return i < 0 ? 0 : i;
+  }
+
+  function render() {
+    const index = currentIndex();
+    const frac = options.length > 1 ? index / (options.length - 1) : 0.5;
+    dial.style.transform = `rotate(${KNOB_ANGLE_MIN + frac * (KNOB_ANGLE_MAX - KNOB_ANGLE_MIN)}deg)`;
+    readout.textContent = options[index].label;
+  }
+  render();
+
+  function setIndex(newIndex) {
+    newIndex = Math.max(0, Math.min(options.length - 1, newIndex));
+    if (options[newIndex].value !== params[key]) {
+      params[key] = options[newIndex].value;
+      render();
+    }
+  }
+
+  let dragging = false, startY = 0, startIndex = 0;
+  dial.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    startY = e.clientY;
+    startIndex = currentIndex();
+    dial.setPointerCapture(e.pointerId);
+    tooltip.show(readout.textContent);
+    e.preventDefault();
+  });
+  dial.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    setIndex(startIndex + Math.round((startY - e.clientY) / KNOB_OPTION_STEP_PX));
+    tooltip.update(readout.textContent);
+  });
+  dial.addEventListener('pointerup', (e) => {
+    dragging = false;
+    tooltip.hide();
+    try { dial.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+  });
+  dial.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    setIndex(currentIndex() + (e.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
+
+  const control = { render };
+  knobControls.push(control);
+  return control;
+}
+
+function renderAllKnobs() {
+  for (const c of knobControls) c.render();
+}
+
+// -------------------------------------------------------------
+// 6. Control panel construction
+// -------------------------------------------------------------
+const groups = {
+  feedback: document.getElementById('feedbackGroup'),
+  generator: document.getElementById('generatorGroup'),
+  transform: document.getElementById('transformGroup'),
+  color: document.getElementById('colorGroup'),
+  blend: document.getElementById('blendGroup'),
+  postfx: document.getElementById('postfxGroup'),
+};
+
+createKnobRow(groups.feedback, { key: 'feedback', label: 'Persistence', min: 0, max: 1, step: 0.005 });
+createKnobRow(groups.feedback, { key: 'zoom', label: 'Zoom', min: 0.9, max: 1.1, step: 0.001 });
+createKnobRow(groups.feedback, { key: 'rotate', label: 'Rotate', min: -0.2, max: 0.2, step: 0.001, snapZero: true });
+createKnobRow(groups.feedback, { key: 'translateX', label: 'Drift X', min: -0.02, max: 0.02, step: 0.0005, snapZero: true });
+createKnobRow(groups.feedback, { key: 'translateY', label: 'Drift Y', min: -0.02, max: 0.02, step: 0.0005, snapZero: true });
+createKnobRow(groups.feedback, { key: 'hueDrift', label: 'Hue Drift', min: -0.05, max: 0.05, step: 0.001, snapZero: true });
+
+createSelectKnobRow(groups.generator, { key: 'genType', label: 'Type', options: GEN_TYPES.map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) })) });
+createKnobRow(groups.generator, { key: 'frequency', label: 'Frequency', min: 1, max: 40, step: 1 });
+createKnobRow(groups.generator, { key: 'speed', label: 'Speed', min: -2, max: 2, step: 0.01, snapZero: true });
+createKnobRow(groups.generator, { key: 'sync', label: 'Osc Sync', min: 0, max: 2, step: 0.01 });
+createKnobRow(groups.generator, { key: 'shapeSides', label: 'Shape Sides', min: 3, max: 12, step: 1 });
+createKnobRow(groups.generator, { key: 'shapeSmoothing', label: 'Shape Soft', min: 0.001, max: 0.3, step: 0.001 });
+createKnobRow(groups.generator, { key: 'noiseScale', label: 'Noise Scale', min: 0.5, max: 20, step: 0.1 });
+createKnobRow(groups.generator, { key: 'solidR', label: 'Solid R', min: 0, max: 1, step: 0.01 });
+createKnobRow(groups.generator, { key: 'solidG', label: 'Solid G', min: 0, max: 1, step: 0.01 });
+createKnobRow(groups.generator, { key: 'solidB', label: 'Solid B', min: 0, max: 1, step: 0.01 });
+
+createKnobRow(groups.transform, { key: 'kaleidSides', label: 'Kaleid Sides', min: 0, max: 16, step: 1, format: (v) => (v < 1.5 ? 'Off' : String(Math.round(v))) });
+createKnobRow(groups.transform, { key: 'pixelate', label: 'Pixelate', min: 0, max: 200, step: 1, format: (v) => (v < 1.5 ? 'Off' : String(Math.round(v))) });
+createKnobRow(groups.transform, { key: 'mirror', label: 'Mirror', min: 0, max: 1, step: 1, format: (v) => (v >= 0.5 ? 'On' : 'Off') });
+
+createKnobRow(groups.color, { key: 'hue', label: 'Hue', min: 0, max: 1, step: 0.005 });
+createKnobRow(groups.color, { key: 'saturate', label: 'Saturate', min: 0, max: 2, step: 0.01 });
+createKnobRow(groups.color, { key: 'contrast', label: 'Contrast', min: 0.5, max: 1.5, step: 0.005 });
+createKnobRow(groups.color, { key: 'posterizeBins', label: 'Posterize', min: 0, max: 32, step: 1, format: (v) => (v < 1.5 ? 'Off' : String(Math.round(v))) });
+createKnobRow(groups.color, { key: 'invertAmount', label: 'Invert', min: 0, max: 1, step: 0.01 });
+
+createSelectKnobRow(groups.blend, { key: 'blendMode', label: 'Mode', options: BLEND_MODES.map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) })) });
+createKnobRow(groups.blend, { key: 'modulateAmount', label: 'Modulate', min: 0, max: 1, step: 0.005, format: (v) => (v < 0.005 ? 'Off' : v.toFixed(3)) });
+
+createKnobRow(groups.postfx, { key: 'chromaOffset', label: 'Chroma', min: 0, max: 0.01, step: 0.0001, format: (v) => (v < 0.0001 ? 'Off' : v.toFixed(4)) });
+createKnobRow(groups.postfx, { key: 'scanlineAmount', label: 'Scanlines', min: 0, max: 1, step: 0.01 });
+createKnobRow(groups.postfx, { key: 'vignetteAmount', label: 'Vignette', min: 0, max: 1, step: 0.01 });
+createKnobRow(groups.postfx, { key: 'grainAmount', label: 'Grain', min: 0, max: 0.3, step: 0.005 });
+
+// -------------------------------------------------------------
+// 7. Uniform upload + render loop
+// -------------------------------------------------------------
+function uploadFeedbackUniforms(t) {
+  const u = feedbackUniforms;
+  gl.uniform1i(u.u_prevFrame, 0);
+  gl.uniform2f(u.u_resolution, W, H);
+  gl.uniform1f(u.u_time, t);
+  gl.uniform1f(u.u_feedback, params.feedback);
+  gl.uniform1f(u.u_zoom, params.zoom);
+  gl.uniform1f(u.u_rotate, params.rotate);
+  gl.uniform2f(u.u_translate, params.translateX, params.translateY);
+  gl.uniform1f(u.u_hueDrift, params.hueDrift);
+  gl.uniform1i(u.u_genType, GEN_TYPES.indexOf(params.genType));
+  gl.uniform1f(u.u_frequency, params.frequency);
+  gl.uniform1f(u.u_speed, params.speed);
+  gl.uniform1f(u.u_sync, params.sync);
+  gl.uniform1f(u.u_shapeSides, params.shapeSides);
+  gl.uniform1f(u.u_shapeSmoothing, params.shapeSmoothing);
+  gl.uniform1f(u.u_noiseScale, params.noiseScale);
+  gl.uniform3f(u.u_solidColor, params.solidR, params.solidG, params.solidB);
+  gl.uniform1f(u.u_kaleidSides, params.kaleidSides);
+  gl.uniform1f(u.u_pixelate, params.pixelate);
+  gl.uniform1f(u.u_mirror, params.mirror);
+  gl.uniform1f(u.u_hue, params.hue);
+  gl.uniform1f(u.u_saturate, params.saturate);
+  gl.uniform1f(u.u_contrast, params.contrast);
+  gl.uniform1f(u.u_posterizeBins, params.posterizeBins);
+  gl.uniform1f(u.u_invertAmount, params.invertAmount);
+  gl.uniform1i(u.u_blendMode, BLEND_MODES.indexOf(params.blendMode));
+  gl.uniform1f(u.u_modulateAmount, params.modulateAmount);
+}
+
+function uploadDisplayUniforms(t) {
+  const u = displayUniforms;
+  gl.uniform1i(u.u_frame, 0);
+  gl.uniform2f(u.u_resolution, W, H);
+  gl.uniform1f(u.u_time, t);
+  gl.uniform1f(u.u_chromaOffset, params.chromaOffset);
+  gl.uniform1f(u.u_scanlineAmount, params.scanlineAmount);
+  gl.uniform1f(u.u_vignetteAmount, params.vignetteAmount);
+  gl.uniform1f(u.u_grainAmount, params.grainAmount);
+}
+
+let lastWritten = buffers[0];
+
+function renderFeedbackPass(t) {
+  const read = buffers[pingIndex];
+  const write = buffers[1 - pingIndex];
+  gl.bindFramebuffer(gl.FRAMEBUFFER, write.fbo);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(feedbackProgram);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, read.tex);
+  uploadFeedbackUniforms(t);
+  drawFullscreenTriangle();
+  lastWritten = write;
+  pingIndex = 1 - pingIndex;
+}
+
+function renderDisplayPass(t) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(displayProgram);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, lastWritten.tex);
+  uploadDisplayUniforms(t);
+  drawFullscreenTriangle();
+}
+
+let simTime = 0;
+let lastNow = performance.now();
+let timePaused = false;
+let frozen = false;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min((now - lastNow) / 1000, 0.1);
+  lastNow = now;
+  if (!timePaused) simTime += dt;
+  if (frozen) return;
+  renderFeedbackPass(simTime);
+  renderDisplayPass(simTime);
+}
+requestAnimationFrame((now) => { lastNow = now; requestAnimationFrame(frame); });
+
+// Recover from a lost WebGL context (e.g. GPU driver reset on
+// resize/tab-switch) by recreating the ping-pong buffers - otherwise
+// the canvas just freezes on black with no obvious cause.
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); frozen = true; }, false);
+canvas.addEventListener('webglcontextrestored', () => {
+  buffers = [createFBO(W, H), createFBO(W, H)];
+  pingIndex = 0;
+  clearFBO(buffers[0]);
+  clearFBO(buffers[1]);
+  lastWritten = buffers[0];
+  frozen = false;
+}, false);
+
+// -------------------------------------------------------------
+// 8. Header actions, presets, randomize
+// -------------------------------------------------------------
+const pauseBtn = document.getElementById('pauseBtn');
+const freezeBtn = document.getElementById('freezeBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+pauseBtn.addEventListener('click', () => {
+  timePaused = !timePaused;
+  pauseBtn.classList.toggle('active', timePaused);
+  pauseBtn.textContent = timePaused ? 'Resume Time' : 'Pause Time';
+});
+
+freezeBtn.addEventListener('click', () => {
+  frozen = !frozen;
+  freezeBtn.classList.toggle('active', frozen);
+  freezeBtn.textContent = frozen ? 'Unfreeze' : 'Freeze';
+});
+
+resetBtn.addEventListener('click', () => {
+  Object.assign(params, DEFAULTS);
+  renderAllKnobs();
+  clearFBO(buffers[0]);
+  clearFBO(buffers[1]);
+  pingIndex = 0;
+  lastWritten = buffers[0];
+});
+
+const PRESET_STORAGE_KEY = 'video-feedback-visualizer-presets';
+
+function loadPresets() {
+  try {
+    return JSON.parse(localStorage.getItem(PRESET_STORAGE_KEY)) || {};
+  } catch (err) {
+    return {};
+  }
+}
+function savePresets(presets) {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+}
+
+const presetListEl = document.getElementById('presetList');
+
+function renderPresetList() {
+  const presets = loadPresets();
+  const names = Object.keys(presets);
+  presetListEl.innerHTML = '';
+  if (names.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'preset-empty';
+    empty.textContent = 'No presets saved yet.';
+    presetListEl.appendChild(empty);
+    return;
+  }
+  for (const name of names) {
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+
+    const label = document.createElement('span');
+    label.className = 'preset-name';
+    label.textContent = name;
+    label.addEventListener('click', () => {
+      Object.assign(params, presets[name]);
+      renderAllKnobs();
+    });
+    item.appendChild(label);
+
+    const del = document.createElement('button');
+    del.className = 'preset-delete';
+    del.textContent = '×';
+    del.title = 'Delete preset';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const current = loadPresets();
+      delete current[name];
+      savePresets(current);
+      renderPresetList();
+    });
+    item.appendChild(del);
+
+    presetListEl.appendChild(item);
+  }
+}
+renderPresetList();
+
+document.getElementById('savePresetBtn').addEventListener('click', () => {
+  const name = window.prompt('Preset name:');
+  if (!name) return;
+  const presets = loadPresets();
+  presets[name] = { ...params };
+  savePresets(presets);
+  renderPresetList();
+});
+
+function randomInRange(min, max, step) {
+  const steps = Math.round((max - min) / step);
+  return min + Math.round(Math.random() * steps) * step;
+}
+
+document.getElementById('randomizeBtn').addEventListener('click', () => {
+  for (const key of Object.keys(registry)) {
+    const spec = registry[key];
+    if (spec.type === 'value') {
+      params[key] = randomInRange(spec.min, spec.max, spec.step);
+    } else {
+      const opt = spec.options[Math.floor(Math.random() * spec.options.length)];
+      params[key] = opt.value;
+    }
+  }
+  renderAllKnobs();
+});
+</script>
+</body>
+</html>
