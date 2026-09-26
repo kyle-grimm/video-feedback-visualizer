@@ -79,6 +79,62 @@ html, body {
 #panel::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
 #panel::-webkit-scrollbar-track { background: var(--panel); }
 
+/* ---------------------------------------------------------------
+   Vertical/portrait screens: stack the stage above the panel instead
+   of side-by-side. #app is pinned to exactly the viewport height with
+   no page-level scroll (html/body overflow: hidden below) - the stage
+   takes only the height it needs at the top and never moves, and
+   #panel is the sole scroll container for the rest (`min-height: 0`
+   is required here, not decoration - without it a flex column child
+   with overflow:auto refuses to shrink below its content size, which
+   would just grow #app past the viewport instead of scrolling #panel).
+   `orientation: portrait` fires whenever viewport height > width, so
+   this also kicks in for a desktop window resized tall and narrow,
+   not just actual mobile devices.
+   --------------------------------------------------------------- */
+@media (orientation: portrait) {
+  html, body {
+    overflow: hidden;
+    height: 100%;
+  }
+
+  #app {
+    width: 100vw;
+    height: 100vh;
+    flex-direction: column;
+    padding: 8px;
+  }
+
+  #stage {
+    width: 100%;
+    height: auto;
+    max-height: 55vh;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
+    margin-right: 0;
+    margin-bottom: 8px;
+  }
+
+  #gl {
+    width: 100%;
+    height: 100%;
+  }
+
+  #panel {
+    width: 100%;
+    height: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    padding: 12px 14px 28px;
+  }
+
+  .panel-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}
+
 .panel-header {
   grid-column: 1 / -1;
   display: flex;
