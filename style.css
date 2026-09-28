@@ -60,6 +60,32 @@ html, body {
   background: #000;
 }
 
+/* Fullscreen: the browser puts whatever element requestFullscreen() was
+   called on into a top-layer viewport-filling box (`:fullscreen`), but
+   leaves ITS OWN sizing untouched - #stage's normal 1000x1000/border/
+   flex-basis rules would otherwise just center a small fixed square in
+   the middle of a black screen. Override to fill the screen and let the
+   square canvas scale up via min(100vw,100vh) so it stays 1:1 and
+   letterboxes instead of stretching on a non-square display. */
+#stage:fullscreen,
+#stage:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-height: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  margin-right: 0;
+}
+
+#stage:fullscreen #gl,
+#stage:-webkit-full-screen #gl {
+  width: min(100vw, 100vh);
+  height: min(100vw, 100vh);
+}
+
 #panel {
   flex: 1 1 auto;
   width: 900px;

@@ -864,6 +864,32 @@ canvas.addEventListener('webglcontextrestored', () => {
 const pauseBtn = document.getElementById('pauseBtn');
 const freezeBtn = document.getElementById('freezeBtn');
 const resetBtn = document.getElementById('resetBtn');
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const stageEl = document.getElementById('stage');
+
+// Vendor-prefixed fallback only matters for older Safari; every other
+// current browser exposes the unprefixed Fullscreen API.
+function currentFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+fullscreenBtn.addEventListener('click', () => {
+  if (!currentFullscreenElement()) {
+    const request = stageEl.requestFullscreen || stageEl.webkitRequestFullscreen;
+    request.call(stageEl);
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    exit.call(document);
+  }
+});
+
+function syncFullscreenBtn() {
+  const active = currentFullscreenElement() === stageEl;
+  fullscreenBtn.classList.toggle('active', active);
+  fullscreenBtn.textContent = active ? 'Exit Fullscreen' : 'Fullscreen';
+}
+document.addEventListener('fullscreenchange', syncFullscreenBtn);
+document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
 pauseBtn.addEventListener('click', () => {
   timePaused = !timePaused;
