@@ -1,23 +1,31 @@
 /* ---------------------------------------------------------------
-   Moog Grandmother inspired panel: light golden-oak end cheeks, a
-   cream control surface, Moog-red-orange accent, knurled dark knobs
-   with a cream pointer line. Shared theme with the sibling
-   Oscilloscope Visualizer project.
+   "Violet on Graphite" - shared theme with the sibling Oscilloscope
+   Visualizer (picked through its UI Lab color experiments; see
+   ..\UI Theme Lab). Neutral graphite surfaces, white text, violet card
+   titles and knob accents, pale-yellow highlights. ON/active states are
+   always red, independent of the theme; value readouts are neutral gray.
    --------------------------------------------------------------- */
 :root {
-  --wood-dark: #4a3319;
-  --wood-mid: #8a6239;
-  --wood-light: #c9a06a;
-  --panel: #e7e0cd;
-  --panel-card: #f2ecdd;
-  --panel-border: #c3b89c;
-  --ink: #2b2620;
-  --ink-dim: #7a7160;
-  --orange: #d8481f;
-  --orange-bright: #f2793f;
-  --knob: #1c1a17;
-  --knob-face: #4a4844;
-  --knob-indicator: #f2ecdd;
+  --frame: #19181a;
+  --panel: #242324;
+  --panel-card: #3b393c;
+  --panel-border: #515053;
+  --ink: #ebebeb;
+  --ink-dim: #a6a4a8;
+  --value: #ababab;
+  /* Highlight color (scrollbars, hover borders, notches) - the name
+     predates the theme. */
+  --orange: #eded78;
+  --knob: #3b393c;
+  --knob-face: #515053;
+  --knob-indicator: #b98aef;
+  --c-title: #ebebeb;
+  --c-legend: #bc8ff0;
+  --c-arc: #af78ed;
+  --on-red: #c81e1e;
+  --on-red-bright: #f0484a;
+  --on-red-border: #5c0b0b;
+  --on-red-rgb: 200,30,30;
 }
 
 * { box-sizing: border-box; }
@@ -37,9 +45,7 @@ html, body {
   height: 1028px;
   display: flex;
   padding: 14px;
-  background:
-    repeating-linear-gradient(100deg, rgba(0,0,0,0.10) 0 2px, transparent 2px 5px),
-    linear-gradient(90deg, var(--wood-dark), var(--wood-light) 12%, var(--wood-mid) 50%, var(--wood-light) 88%, var(--wood-dark));
+  background: var(--frame);
 }
 
 #stage {
@@ -176,8 +182,7 @@ html, body {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--orange);
-  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  color: var(--c-title);
   margin: 0;
 }
 
@@ -186,8 +191,8 @@ html, body {
 button {
   font-family: inherit;
   cursor: pointer;
-  border: 1px solid #a89f8a;
-  background: linear-gradient(#f8f4e9, #ddd4b8);
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
   color: var(--ink);
   border-radius: 4px;
   padding: 7px 12px;
@@ -195,49 +200,60 @@ button {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 2px rgba(0,0,0,0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.25);
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-button:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
+button:hover { border-color: var(--orange); }
 
-.wide-btn {
-  background: linear-gradient(#f8f4e9, #ddd4b8);
-  border-color: #a89f8a;
-  color: var(--ink);
-}
-.wide-btn:hover { background: linear-gradient(#fffdf6, #e6dcbf); }
-.wide-btn.active {
-  background: linear-gradient(var(--orange-bright), var(--orange));
-  border-color: #000;
-  color: #fff6ec;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 6px rgba(216,72,31,0.5);
-}
 .wide-btn.ghost {
-  background: #efe8d5;
+  background: var(--panel-card);
   color: var(--ink-dim);
-  border-color: #c3b89c;
   font-weight: 700;
 }
-.wide-btn.ghost:hover { color: var(--ink); background: #f5efdd; }
+.wide-btn.ghost:hover { color: var(--ink); border-color: var(--orange); }
+/* Active/ON is always red (after the ghost rules so ghost buttons -
+   Pause, Freeze, Fullscreen, Camera - show it too). */
+.wide-btn.active,
+.wide-btn.ghost.active,
+.wide-btn.ghost.active:hover {
+  background: linear-gradient(var(--on-red-bright), var(--on-red));
+  border-color: var(--on-red-border);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 0 6px rgba(var(--on-red-rgb),0.5);
+}
 
 fieldset.group {
   border: 1px solid var(--panel-border);
-  border-radius: 4px;
+  border-radius: 7px;
   margin: 0;
   height: fit-content;
   padding: 10px 14px 14px;
   background: var(--panel-card);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.12);
 }
 
-fieldset.group legend {
-  padding: 0 6px;
+/* Card titles as a full-width title band framed inside the card:
+   floating the legend takes it out of the fieldset border notch, the
+   negative margins stretch it edge to edge, and the next element
+   clears it. */
+fieldset.group > legend {
+  float: left;
+  box-sizing: border-box;
+  width: calc(100% + 28px);
+  margin: -10px -14px 10px;
+  padding: 7px 14px 6px;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(rgba(0,0,0,0.26), rgba(0,0,0,0.08));
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--orange);
+  color: var(--c-legend);
+}
+fieldset.group > legend + * {
+  clear: both;
 }
 
 .subhead {
@@ -271,7 +287,7 @@ fieldset.group legend {
   text-align: right;
   font-size: 11px;
   font-weight: 700;
-  color: var(--orange);
+  color: var(--value);
   font-variant-numeric: tabular-nums;
 }
 
@@ -282,16 +298,18 @@ fieldset.group legend {
 }
 
 /* ---------------------------------------------------------------
-   Generator "fields": Moog Grandmother-style flat color panels that
-   visually separate each generator type's own parameters (oscillator
-   knobs on gold, noise on lavender, etc.) inside the single Generator
-   fieldset, the way the real hardware tints whole panel sections
-   rather than just outlining groups.
+   Generator "fields": panels that visually separate each generator
+   type's own parameters inside the single Generator fieldset. On the
+   graphite theme each is a recessed near-neutral panel keyed by a
+   colored left edge (camera teal, oscillator gold, noise lavender,
+   shape coral, solid green) rather than a fully tinted fill.
    --------------------------------------------------------------- */
 .gen-field {
   border-radius: 4px;
   padding: 8px 10px 2px;
   margin: 8px 0;
+  background: var(--panel);
+  border-left: 3px solid var(--field-key);
 }
 
 .gen-field .row { margin: 5px 0 7px; }
@@ -301,22 +319,21 @@ fieldset.group legend {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--ink);
-  opacity: 0.6;
+  color: var(--field-key);
   margin-bottom: 2px;
 }
 
-.gen-field-camera { background: #bcd8d3; }
-.gen-field-osc { background: #e8d9a0; }
-.gen-field-noise { background: #cdc3e0; }
-.gen-field-shape { background: #e3b9ab; }
-.gen-field-solid { background: #c3d9b0; }
+.gen-field-camera { --field-key: #7fc4b9; }
+.gen-field-osc { --field-key: #e0c86e; }
+.gen-field-noise { --field-key: #b3a3e0; }
+.gen-field-shape { --field-key: #e39a85; }
+.gen-field-solid { --field-key: #9ccc7e; }
 
 .gl-error {
   grid-column: 1 / -1;
   padding: 14px;
-  background: #f6d9d3;
-  border: 1px solid var(--orange);
+  background: #3a2224;
+  border: 1px solid var(--on-red-bright);
   border-radius: 4px;
   color: var(--ink);
   font-size: 13px;
@@ -341,7 +358,7 @@ fieldset.group legend {
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, var(--knob-face), var(--knob) 75%);
   border: 1px solid #000;
-  box-shadow: 0 0 0 2px rgba(216,72,31,0.35), 0 1px 3px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.15);
+  box-shadow: 0 0 0 2px rgba(175,120,237,0.55), 0 1px 3px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.15);
   position: relative;
   flex: none;
   cursor: ns-resize;
@@ -401,7 +418,7 @@ fieldset.group legend {
 .knob-readout {
   font-size: 12px;
   font-weight: 700;
-  color: var(--orange);
+  color: var(--value);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -417,12 +434,12 @@ fieldset.group legend {
   overflow-y: auto;
   border: 1px solid var(--panel-border);
   border-radius: 3px;
-  background: #efe8d5;
+  background: var(--panel);
 }
 
 .preset-list::-webkit-scrollbar { width: 8px; }
 .preset-list::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
-.preset-list::-webkit-scrollbar-track { background: #efe8d5; }
+.preset-list::-webkit-scrollbar-track { background: var(--panel); }
 
 .preset-item {
   display: flex;
@@ -437,7 +454,7 @@ fieldset.group legend {
   cursor: pointer;
 }
 .preset-item:last-child { border-bottom: none; }
-.preset-item:hover { background: #e2d9bd; }
+.preset-item:hover { background: rgba(255,255,255,0.05); }
 
 .preset-item .preset-name {
   flex: 1 1 auto;
