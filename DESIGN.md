@@ -389,6 +389,38 @@ current shader:
 
 ## 8. Control panel plan
 
+**Rebuilt 2026-10-11 (supersedes the tables below).** The panel is now a fixed
+900 x 1440 stage scaled to fit the window, styled after the Oscilloscope
+Visualizer's L9 panel (graphite, outlined sections with ink nameplates, MS-20
+knobs, rubber keys with LEDs, black glass screens, Barlow Semi Condensed). Layout,
+from the user's sketch:
+
+- **Screen** (top left): a 9:16 canvas (rendered at 720 x 1280) in a bezel.
+  Under it, a row of keys: Pause, Freeze, Reset, Random, Full (fullscreen; a
+  double-click on the screen does the same).
+- **Layers** (below, left), 2 x 2 in the same order as the pad corners: Camera
+  (On key + Front / Back), Osc Speed, Noise Scale, Shape Sides.
+- **Mix** (below, right of Layers): an XY pad that crossfades the four layers'
+  opacity with bilinear weights that always sum to 1 (Camera top-left,
+  Oscillator top-right, Noise bottom-left, Shape bottom-right). The generator
+  `type` selector is gone: all four layers are drawn and mixed every frame.
+- **Right column**, two knobs per row: Feedback (Blend Mode, Modulate,
+  Persistence, Delay); Transform (Zoom, Rotate, Shift X, Shift Y, Hue Drift);
+  Color (Hue, Saturation, Brightness, Contrast, Invert); Chromakey (On, Key Hue,
+  Key Sat, Key Light, Threshold, Softness). Transform and Color share a row
+  (Hue Drift | Hue), so their outlines step around each other there.
+- **Background** (bottom): Hue / Saturation / Lightness faders for the layer under
+  the mix. It shows wherever the mix leaves no coverage (around the shape,
+  or where the camera layer is weighted in while the camera is off).
+
+Dropped in the rebuild: the Gradient and Solid generators (Solid became the
+Background), the Frequency, Osc Sync and Shape Soft knobs (now fixed at 8, 0.2
+and 0.05), and the localStorage preset list. The chromakey key colour is now set
+as HSL (converted to RGB in JS). Noise drifts at a fixed rate, so Osc Speed
+moves only the oscillator.
+
+The rest of this section is the earlier plan, kept for history.
+
 Reuse the existing dark-panel conventions from the sibling projects
 (`.group`/`.row`/`.wide-btn`/`.knob-select`, per project memory) rather than
 inventing new panel CSS. Suggested parameter groups, each a `<fieldset
