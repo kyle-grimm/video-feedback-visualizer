@@ -93,6 +93,7 @@ function dragValue(target, ctl, range) {
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:3px;pointer-events:none');
+  if (fam) b.className = 'frame frame-' + fam;
   nameplate(b, 12, -9, title, fam);
   return b;
 }
@@ -131,6 +132,7 @@ function outline(pts, title, tabX, tabY, fam) {
   path.setAttribute('d', roundedPath(pts, x0, y0));
   path.setAttribute('fill', 'none'); path.setAttribute('stroke', P.inkMute); path.setAttribute('stroke-width', '1');
   path.setAttribute('transform', 'translate(0.5 0.5)');
+  if (fam) path.setAttribute('class', 'frame frame-' + fam);
   svg.appendChild(path);
   panel.appendChild(svg);
   nameplate(panel, tabX, tabY - 9, title, fam);
@@ -367,7 +369,8 @@ function build() {
 
 // TEMPORARY: cycles the surface-texture schemes that tell the parameter families apart (see "UI schemes" in
 // style.css). Remove this key, the fam classes' CSS for the losing schemes, and data-scheme once one is chosen.
-var SCHEMES = [['base', 'Base'], ['plates', 'Plates'], ['hatch', 'Hatch'], ['brushed', 'Brushed'], ['grille', 'Grille']];
+var SCHEMES = [['base', 'Base'], ['plates', 'Plates'], ['hatch', 'Hatch'], ['brushed', 'Brushed'], ['grille', 'Grille'],
+  ['anodized', 'Anodized'], ['inlay', 'Inlay'], ['spun', 'Spun'], ['engraved', 'Engraved']];
 function buildSchemeKey() {
   var i = 0;
   try { i = Math.max(0, SCHEMES.map(function (s) { return s[0]; }).indexOf(localStorage.getItem('vfv-ui-scheme'))); } catch (e) { /* storage blocked */ }

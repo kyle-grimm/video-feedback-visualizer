@@ -96,3 +96,40 @@ button:focus-visible { box-shadow: 0 0 0 2px #cfabf6 !important; }
                                               box-shadow: inset 4px 0 0 #c9c6d0; }
 #stage[data-scheme="grille"] .fam-bg        { background-image: radial-gradient(circle, rgba(0,0,0,0.55) 1.5px, transparent 2px); background-size: 7px 12px;
                                               box-shadow: inset 4px 0 0 #e88aa8; }
+
+/* ---- Brushed x Plates hybrids (schemes 6-9) ----------------------------------------
+   Per-family colours shared by these schemes: --fc nameplate/key colour (Plates tabs),
+   --plate (Plates fill), --alloy (Brushed fill), --anod (a more saturated anodised tint). */
+.fam-feedback,  .tab-feedback,  .frame-feedback  { --fc: #b98aef; --plate: #2f293d; --alloy: #3a3442; --anod: #3d2f57; }
+.fam-transform, .tab-transform, .frame-transform { --fc: #6fa8ff; --plate: #232f40; --alloy: #323b47; --anod: #233a5a; }
+.fam-color,     .tab-color,     .frame-color     { --fc: #f0b45a; --plate: #3a2f22; --alloy: #43392b; --anod: #573f1f; }
+.fam-chroma,    .tab-chroma,    .frame-chroma    { --fc: #5fd08a; --plate: #213529; --alloy: #2f3d35; --anod: #1f4a30; }
+.fam-layers,    .tab-layers,    .frame-layers    { --fc: #57c4c4; --plate: #213639; --alloy: #353b40; --anod: #1d4a4e; }
+.fam-mix,       .tab-mix,       .frame-mix       { --fc: #c9c6d0; --plate: #2b2b31; --alloy: #333236; --anod: #35353f; }
+.fam-bg,        .tab-bg,        .frame-bg        { --fc: #e88aa8; --plate: #3a262f; --alloy: #432f2b; --anod: #552a3b; }
+.fam {
+  --grain: repeating-linear-gradient(0deg, rgba(255,255,255,0.028) 0 1px, rgba(0,0,0,0.05) 1px 2px, transparent 2px 3px, rgba(255,255,255,0.015) 3px 4px, transparent 4px 7px);
+  --sheen: linear-gradient(170deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 40%, rgba(0,0,0,0.22));
+}
+#stage[data-scheme="anodized"] .tab, #stage[data-scheme="inlay"] .tab { background: var(--fc) !important; }
+
+/* 6. Anodized: Brushed's grain and sheen over stronger, more saturated Plates colours, with Plates' coloured nameplates. */
+#stage[data-scheme="anodized"] .fam { background-color: var(--anod);
+  background-image: var(--grain), linear-gradient(170deg, rgba(255,255,255,0.13), rgba(255,255,255,0) 45%, rgba(0,0,0,0.28)); }
+
+/* 7. Inlay: one neutral brushed-steel panel everywhere, with a coloured plate inlaid as a header band under each nameplate. */
+#stage[data-scheme="inlay"] .fam { background-color: #36353a;
+  background-image: linear-gradient(to bottom, var(--anod) 0 18px, rgba(0,0,0,0.55) 18px 19px, rgba(255,255,255,0.06) 19px 20px, transparent 20px),
+                    var(--grain), var(--sheen); }
+
+/* 8. Spun: Plates colours as spun metal (fine concentric rings from the panel centre, with a turning sheen), metal nameplates. */
+#stage[data-scheme="spun"] .fam { background-color: var(--plate);
+  background-image: repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0 1px, rgba(0,0,0,0.05) 1px 2px, transparent 2px 3px),
+                    conic-gradient(from 20deg at 50% 50%, rgba(255,255,255,0.10), rgba(0,0,0,0.16) 25%, rgba(255,255,255,0.08) 50%, rgba(0,0,0,0.16) 75%, rgba(255,255,255,0.10)); }
+#stage[data-scheme="spun"] .tab { background: linear-gradient(to bottom, #e4e4e8, #a9a8ae) !important; box-shadow: 0 1px 0 rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.7); }
+
+/* 9. Engraved: Brushed's alloys, with the Plates colour moved onto the outline and an engraved dark nameplate. */
+#stage[data-scheme="engraved"] .fam { background-color: var(--alloy); background-image: var(--grain), var(--sheen); }
+#stage[data-scheme="engraved"] div.frame { border-color: var(--fc) !important; }
+#stage[data-scheme="engraved"] path.frame { stroke: var(--fc); }
+#stage[data-scheme="engraved"] .tab { background: #19181a !important; color: var(--fc) !important; box-shadow: 0 0 0 1px var(--fc), inset 0 1px 2px rgba(0,0,0,0.8); }
