@@ -223,32 +223,43 @@ function glass(x, y, w, h, aria) {
   return { g: g, c: c, x: c.getContext('2d'), w: c.width, h: c.height };
 }
 
-// Horizontal fader: a glass slot holding a colour ramp, with a rubber cap. Drag or tap anywhere along it.
+// Fader: a glass slot holding a colour ramp, with a rubber cap. Drag or tap anywhere along it.
+// Horizontal: (x, y) is the left end of the centre line and w its length. o.vertical: (x, y) is the top end and w the
+// length, with low values at the bottom.
 function fader(x, y, w, label, key, o) {
   o = o || {};
-  var d = PD[key], capW = 16, capH = 30;
-  var hit = el('div', at(x, y - capH / 2, w, capH) + ';cursor:ew-resize;touch-action:none');
+  var d = PD[key], capW = 16, capH = 30, vert = !!o.vertical;
+  var hit = el('div', (vert ? at(x - capH / 2, y, capH, w) : at(x, y - capH / 2, w, capH)) + ';cursor:' + (vert ? 'ns' : 'ew') + '-resize;touch-action:none');
   hit.setAttribute('role', 'slider'); hit.tabIndex = 0; hit.setAttribute('aria-label', label);
-  var slot = el('div', at(0, capH / 2 - 7, w, 14) + ';box-sizing:border-box;padding:3px;border-radius:7px;background:#050406;box-shadow:inset 0 2px 5px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)', hit);
+  var slot = el('div', (vert ? at(capH / 2 - 7, 0, 14, w) : at(0, capH / 2 - 7, w, 14)) + ';box-sizing:border-box;padding:3px;border-radius:7px;background:#050406;box-shadow:inset 0 2px 5px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)', hit);
   var ramp = el('div', 'width:100%;height:100%;border-radius:4px', slot);
-  var cap = el('div', at(0, 0, capW, capH) + ';box-sizing:border-box;margin-left:-' + (capW / 2) + 'px;border-radius:4px;pointer-events:none;' +
+  var cap = el('div', (vert ? at(0, 0, capH, capW) + ';margin-top:-' : at(0, 0, capW, capH) + ';margin-left:-') + (capW / 2) + 'px;box-sizing:border-box;border-radius:4px;pointer-events:none;' +
     'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09)', hit);
-  el('div', 'position:absolute;left:50%;top:5px;bottom:5px;width:2px;margin-left:-1px;border-radius:1px;background:' + P.ink, cap);
-  cl(x + w / 2, y + capH / 2 + 8, w, label, PRINT(10, P.inkDim));
+  el('div', (vert ? 'position:absolute;top:50%;left:5px;right:5px;height:2px;margin-top:-1px' : 'position:absolute;left:50%;top:5px;bottom:5px;width:2px;margin-left:-1px') + ';border-radius:1px;background:' + P.ink, cap);
+  if (vert) cl(x, y + w + 10, 110, label, PRINT(10, P.inkDim));
+  else cl(x + w / 2, y + capH / 2 + 8, w, label, PRINT(10, P.inkDim));
   var k = {
-    v: 0, ramp: ramp, def: toV(d, d.def),
+    v: 0, ramp: ramp, dir: vert ? 'to top' : 'to right', def: toV(d, d.def),
     text: function () { return label + '  ' + d.f(params[key]); },
-    show: function (v) { k.v = v; cap.style.left = (capW / 2 + v * (w - capW)) + 'px'; hit.setAttribute('aria-valuetext', d.f(params[key])); },
+    show: function (v) {
+      k.v = v;
+      if (vert) cap.style.top = (capW / 2 + (1 - v) * (w - capW)) + 'px'; else cap.style.left = (capW / 2 + v * (w - capW)) + 'px';
+      hit.setAttribute('aria-valuetext', d.f(params[key]));
+    },
     set: function (v) { var xv = fromV(d, v); params[key] = xv; k.show(toV(d, xv)); if (o.after) o.after(xv); },
     sync: function () { k.show(toV(d, params[key])); if (o.after) o.after(params[key]); }
   };
   k.sync();
-  var fromX = function (cx) { var r = hit.getBoundingClientRect(), cw = capW * r.width / w; return clamp((cx - r.left - cw / 2) / (r.width - cw)); };
+  var fromEv = function (e) {
+    var r = hit.getBoundingClientRect();
+    if (vert) { var ch = capW * r.height / w; return clamp(1 - (e.clientY - r.top - ch / 2) / (r.height - ch)); }
+    var cw = capW * r.width / w; return clamp((e.clientX - r.left - cw / 2) / (r.width - cw));
+  };
   hit.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
     e.preventDefault(); hit.setPointerCapture(e.pointerId); dragging = true;
-    k.set(fromX(e.clientX)); showTip(cap, k.text());
-    var move = function (ev) { k.set(fromX(ev.clientX)); showTip(cap, k.text()); };
+    k.set(fromEv(e)); showTip(cap, k.text());
+    var move = function (ev) { k.set(fromEv(ev)); showTip(cap, k.text()); };
     var up = function () { dragging = false; hit.removeEventListener('pointermove', move); hit.removeEventListener('pointerup', up); hit.removeEventListener('pointercancel', up); hideTip(); };
     hit.addEventListener('pointermove', move); hit.addEventListener('pointerup', up); hit.addEventListener('pointercancel', up);
   });
@@ -328,37 +339,60 @@ function hslToRgb(h, s, l) {
 }
 
 // -------------------------------------------------------------
-// 3. Panel layout. 900 x 1440 stage (the layout sketch): the 9:16 screen top-left with the header keys under it, the
-// Layers knobs and XY Mix pad below that, the effect knobs in two columns down the right, and the Background HSL faders
-// along the bottom.
+// 3. Panel layout, in two orientations chosen by the window's shape (or #portrait / #landscape in the URL).
+// Portrait, 900 x 1440 (the layout sketch): the 9:16 screen top left with the header keys under it, the Layers knobs
+// and XY Mix pad below that, the effect knobs in two columns down the right, the Background HSL faders along the bottom.
+// Landscape, 1472 x 908: the same panel rotated 90 degrees clockwise and flipped horizontally (a transpose). The screen
+// stays top left but turns 16:9, the header keys stand in a column to its right, Layers and Mix sit right of that, the
+// effect knobs run in two rows along the bottom, and the Background faders stand vertically down the right edge.
+// Everything is written in portrait coordinates; pt() and box() transpose them for landscape (y gains 8 so the top
+// nameplates clear the edge).
 // -------------------------------------------------------------
-var SW = 900, SH = 1440, M = 8;
-var LW = 560, RX = M + LW + 16, RW = SW - M - RX;               // left column (screen) and right column (knobs)
+var M = 8;
+var LW = 560, RX = M + LW + 16, RW = 900 - M - RX;               // left column (screen) and right column (knobs)
 var BEZ = [M, 16, LW, 980];                                      // bezel; the canvas inside is 540 x 960 (9:16)
-var KEY_Y = 1008, LOW_Y = 1056, LOW_B = 1328, BG_Y = 1344, BG_B = SH - M;
+var KEY_Y = 1008, LOW_Y = 1056, LOW_B = 1328, BG_Y = 1344;
 var ROW_Y0 = 8, ROW_P = (LOW_B + 8 - ROW_Y0) / 10;               // ten knob rows on the right
-var CW = 720, CH = 1280;                                         // render resolution
+var LAND = false, SW = 900, SH = 1440, CW = 720, CH = 1280;      // orientation, stage size, render resolution
+function pt(x, y) { return LAND ? [y, x + 8] : [x, y]; }
+function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
+function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
+function knobAt(x, y, size, label, key, o) { var p = pt(x, y); return knob(p[0], p[1], size, label, key, o); }
+var LABEL = 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap';
+
+// The WebGL canvas outlives layout rebuilds (its context, programs and camera texture stay); only its size changes.
+var glCanvas = document.createElement('canvas');
+glCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
 
 var ui = {};
-function build() {
+function build(land) {
+  LAND = land;
+  SW = LAND ? 1472 : 900; SH = LAND ? 908 : 1440; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
+  hideTip(); panel.innerHTML = ''; syncers = []; ui = {};
   stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
 
-  // Screen: a bezel holding the 9:16 WebGL canvas, no text. Double-click for fullscreen.
-  var bez = el('div', at(BEZ[0], BEZ[1], BEZ[2], BEZ[3]) + ';box-sizing:border-box;padding:10px;border-radius:8px;background:#0b0b0c;box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)');
+  // Screen: a bezel holding the WebGL canvas, no text. Double-click for fullscreen.
+  var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
+  var bez = el('div', at(b[0], b[1], b[2], b[3]) + ';box-sizing:border-box;padding:10px;border-radius:8px;background:#0b0b0c;box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)');
   bez.setAttribute('aria-label', 'Video feedback output');
   ui.screen = el('div', 'position:relative;width:100%;height:100%;border-radius:3px;background:#000;overflow:hidden', bez);
   ui.screen.id = 'screen';
-  ui.canvas = el('canvas', 'position:absolute;inset:0;width:100%;height:100%;display:block', ui.screen);
-  ui.canvas.width = CW; ui.canvas.height = CH;
+  ui.screen.appendChild(glCanvas);
+  if (glCanvas.width !== CW || glCanvas.height !== CH) { glCanvas.width = CW; glCanvas.height = CH; }
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 
-  // Header keys under the screen.
-  var kn = 5, kg = 10, kw = (LW - (kn - 1) * kg) / kn, kx = function (i) { return M + i * (kw + kg); };
-  ui.pause = key(kx(0), KEY_Y, kw, 28, 'Pause', 'off', { tint: 'blue', aria: 'Pause time', onClick: function () { timePaused = !timePaused; ui.pause.set(timePaused ? 'on' : 'off'); } });
-  ui.freeze = key(kx(1), KEY_Y, kw, 28, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); } });
-  ui.reset = key(kx(2), KEY_Y, kw, 28, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
-  ui.rand = key(kx(3), KEY_Y, kw, 28, 'Random', null, { aria: 'Randomize', onClick: randomize });
-  ui.full = key(kx(4), KEY_Y, kw, 28, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  // Header keys: a row under the screen (portrait) or a column beside it (landscape).
+  var kn = 5, kg = 10, kpos = function (i) {
+    if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; return [BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]; }
+    var kw = (LW - (kn - 1) * kg) / kn; return [M + i * (kw + kg), KEY_Y, kw, 28];
+  };
+  var K = function (i, label, led, o) { var p = kpos(i); o.fs = LAND ? 9 : 10; return key(p[0], p[1], p[2], p[3], label, led, o); };
+  ui.pause = K(0, 'Pause', 'off', { tint: 'blue', aria: 'Pause time', onClick: function () { timePaused = !timePaused; ui.pause.set(timePaused ? 'on' : 'off'); } });
+  ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); } });
+  ui.reset = K(2, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
+  ui.rand = K(3, 'Random', null, { aria: 'Randomize', onClick: randomize });
+  ui.full = K(4, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off');
 
   buildLayers();
   buildMix();
@@ -366,23 +400,23 @@ function build() {
   buildBackground();
 }
 
-// Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it.
+// Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape).
 var PAD = 238;
 function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
-  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Layers', 'layers');
+  secBox(box(x, LOW_Y, w, LOW_B - LOW_Y), 'Layers', 'layers');
   var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
   // Camera: On (enable) over a Front / Back pair.
-  var bw = 104, bx = cx[0] - bw / 2;
-  ui.camOn = key(bx, cy[0] - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
+  var c = pt(cx[0], cy[0]), bw = 104, bx = c[0] - bw / 2;
+  ui.camOn = key(bx, c[1] - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
   ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + i * (bw / 2 + 2), cy[0] - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+    return key(bx + i * (bw / 2 + 2), c[1] - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
   });
-  cl(cx[0], cy[0] + 35, 120, 'Camera', 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap');
+  cl(c[0], c[1] + 35, 120, 'Camera', LABEL);
   syncCam();
-  knob(cx[1], cy[0], 40, 'Osc Speed', 'speed');
-  knob(cx[0], cy[1], 40, 'Noise Scale', 'noiseScale');
-  knob(cx[1], cy[1], 40, 'Shape Sides', 'shapeSides', { ticks: 10, after: drawPad });
+  knobAt(cx[1], cy[0], 40, 'Osc Speed', 'speed');
+  knobAt(cx[0], cy[1], 40, 'Noise Scale', 'noiseScale');
+  knobAt(cx[1], cy[1], 40, 'Shape Sides', 'shapeSides', { ticks: 10, after: drawPad });
 }
 
 // Mix: XY pad crossfading the four layers' opacity.
@@ -405,29 +439,33 @@ function polygonPath(n) {
   for (var i = 0; i < n; i++) { var a = i / n * TAU; d += (i ? 'L' : 'M') + (50 + 34 * Math.sin(a)).toFixed(2) + ' ' + (54 - 34 * Math.cos(a)).toFixed(2); }
   return d + 'Z';
 }
+// Pad space (u rightward, v downward, 0..1) <-> mixer position. The pad transposes with the panel, so the layers keep
+// their corners relative to the Layers knobs: portrait u = mixX, v = 1 - mixY; landscape u = 1 - mixY, v = mixX.
+function mixToPad() { return LAND ? [1 - params.mixY, params.mixX] : [params.mixX, 1 - params.mixY]; }
+function padToMix(u, v) {
+  u = clamp(u); v = clamp(v);
+  if (LAND) { params.mixY = 1 - u; params.mixX = v; } else { params.mixX = u; params.mixY = 1 - v; }
+  drawPad();
+}
 function buildMix() {
-  var x = M + 278 + 16, w = LW - 278 - 16;
-  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Mix', 'mix');
-  ui.pad = glass(x + (w - PAD) / 2, LOW_Y + 20, PAD, PAD, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
+  var s = box(M + 278 + 16, LOW_Y, LW - 278 - 16, LOW_B - LOW_Y);
+  secBox(s, 'Mix', 'mix');
+  ui.pad = glass(s[0] + (s[2] - PAD) / 2, s[1] + 20, PAD, PAD, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
   var g = ui.pad.g;
   g.style.cursor = 'crosshair'; g.style.touchAction = 'none';
   g.setAttribute('role', 'slider'); g.tabIndex = 0;
-  var setFrom = function (e) {
-    var r = g.getBoundingClientRect();
-    params.mixX = clamp((e.clientX - r.left) / r.width); params.mixY = clamp(1 - (e.clientY - r.top) / r.height);
-    drawPad();
-  };
+  var setFrom = function (e) { var r = g.getBoundingClientRect(); padToMix((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); };
   g.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
     e.preventDefault(); g.setPointerCapture(e.pointerId); dragging = true; setFrom(e);
     var up = function () { dragging = false; g.removeEventListener('pointermove', setFrom); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); };
     g.addEventListener('pointermove', setFrom); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
   });
-  g.addEventListener('dblclick', function () { params.mixX = 0.5; params.mixY = 0.5; drawPad(); });
+  g.addEventListener('dblclick', function () { padToMix(0.5, 0.5); });
   g.addEventListener('keydown', function (e) {
-    var dx = { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0, dy = { ArrowDown: -1, ArrowUp: 1 }[e.key] || 0;
+    var dx = { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0, dy = { ArrowDown: 1, ArrowUp: -1 }[e.key] || 0;
     if (!dx && !dy) return;
-    e.preventDefault(); params.mixX = clamp(params.mixX + dx * 0.02); params.mixY = clamp(params.mixY + dy * 0.02); drawPad();
+    e.preventDefault(); var p = mixToPad(); padToMix(p[0] + dx * 0.02, p[1] + dy * 0.02);
   });
   syncers.push(drawPad);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawPad);
@@ -445,7 +483,8 @@ function drawPad() {
   var icons = [PAD_ICONS.camera, PAD_ICONS.osc, PAD_ICONS.noise, polygonPath(Math.round(params.shapeSides))];
   var names = ['Camera', 'Osc', 'Noise', 'Shape'];
   icons.forEach(function (d, i) {
-    var ox = (i % 2) * q, oy = Math.floor(i / 2) * q, s = q * 0.5 / 100;
+    var col = LAND ? Math.floor(i / 2) : i % 2, row = LAND ? i % 2 : Math.floor(i / 2);
+    var ox = col * q, oy = row * q, s = q * 0.5 / 100;
     c.save();
     c.globalAlpha = 0.22 + 0.78 * wt[i];
     c.translate(ox + q * 0.25, oy + q * 0.27); c.scale(s, s);
@@ -454,7 +493,7 @@ function drawPad() {
     c.stroke(new Path2D(d));
     c.restore();
     // Corner label and its share of the mix.
-    var right = i % 2 === 1, bottom = i > 1, tx = right ? w - 14 : 14;
+    var right = col === 1, bottom = row === 1, tx = right ? w - 14 : 14;
     c.textAlign = right ? 'right' : 'left';
     c.font = '800 17px "Barlow Semi Condensed", "Segoe UI", sans-serif';
     c.fillStyle = P.inkMute;
@@ -464,7 +503,7 @@ function drawPad() {
     c.fillText(Math.round(wt[i] * 100) + '%', tx, bottom ? h - 12 : 50);
   });
   // Puck with crosshair.
-  var px = params.mixX * w, py = (1 - params.mixY) * h;
+  var pp = mixToPad(), px = pp[0] * w, py = pp[1] * h;
   c.strokeStyle = 'rgba(220,232,255,0.28)'; c.lineWidth = 2; c.setLineDash([6, 8]);
   c.beginPath(); c.moveTo(px, 0); c.lineTo(px, h); c.moveTo(0, py); c.lineTo(w, py); c.stroke(); c.setLineDash([]);
   c.shadowColor = P.accentGlow; c.shadowBlur = 10;
@@ -475,48 +514,54 @@ function drawPad() {
   p.g.setAttribute('aria-valuetext', names.map(function (n, i) { return n + ' ' + Math.round(wt[i] * 100) + '%'; }).join(', '));
 }
 
-// Right column: Feedback, Transform, Color, Chromakey. Transform and Color share row 5 (Hue Drift / Hue), so their
-// outlines step around each other there.
+// Right column (portrait) / bottom band (landscape): Feedback, Transform, Color, Chromakey. Transform and Color share
+// row 5 (Hue Drift / Hue), so their outlines step around each other there.
 function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2, R2 = RX + RW;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
-  var ks = 42;
-  sec(RX, B(0) + 8, RW, B(2) - B(0) - 16, 'Feedback', 'feedback');
-  outline([[RX, B(2) + 8], [R2, B(2) + 8], [R2, B(4) - 8], [mid - 8, B(4) - 8], [mid - 8, B(5) - 8], [RX, B(5) - 8]], 'Transform', RX + 12, B(2) + 8, 'transform');
-  outline([[mid + 8, B(4) + 8], [R2, B(4) + 8], [R2, B(7) - 8], [RX, B(7) - 8], [RX, B(5) + 8], [mid + 8, B(5) + 8]], 'Color', mid + 20, B(4) + 8, 'color');
-  sec(RX, B(7) + 8, RW, B(10) - B(7) - 16, 'Chromakey', 'chroma');
+  var ks = 42, P2 = function (a) { return pt(a[0], a[1]); };
+  secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), 'Feedback', 'feedback');
+  // Nameplates sit on each shape's top edge: in landscape that is the long edge the panel's right side became.
+  var tT = LAND ? [B(2) + 20, RX + 8] : [RX + 12, B(2) + 8], tC = LAND ? [B(5) + 20, RX + 8] : [mid + 20, B(4) + 8];
+  outline([[RX, B(2) + 8], [R2, B(2) + 8], [R2, B(4) - 8], [mid - 8, B(4) - 8], [mid - 8, B(5) - 8], [RX, B(5) - 8]].map(P2), 'Transform', tT[0], tT[1], 'transform');
+  outline([[mid + 8, B(4) + 8], [R2, B(4) + 8], [R2, B(7) - 8], [RX, B(7) - 8], [RX, B(5) + 8], [mid + 8, B(5) + 8]].map(P2), 'Color', tC[0], tC[1], 'color');
+  var ck = box(RX, B(7) + 8, RW, B(10) - B(7) - 16);
+  secBox(ck, 'Chromakey', 'chroma');
 
-  ui.blend = knob(c1, cy(0), ks, 'Blend Mode', 'blendMode', { ticks: 4, after: syncBlendLegend });
-  blendLegend(c1, cy(0), ui.blend.R);
-  knob(c2, cy(0), ks, 'Modulate', 'modulateAmount');
-  knob(c1, cy(1), ks, 'Persistence', 'feedback');
-  knob(c2, cy(1), ks, 'Delay', 'delay');
+  ui.blend = knobAt(c1, cy(0), ks, 'Blend Mode', 'blendMode', { ticks: 4, after: syncBlendLegend });
+  var bp = pt(c1, cy(0));
+  blendLegend(bp[0], bp[1], ui.blend.R);
+  knobAt(c2, cy(0), ks, 'Modulate', 'modulateAmount');
+  knobAt(c1, cy(1), ks, 'Persistence', 'feedback');
+  knobAt(c2, cy(1), ks, 'Delay', 'delay');
 
-  knob(c1, cy(2), ks, 'Zoom', 'zoom');
-  knob(c2, cy(2), ks, 'Rotate', 'rotate');
-  knob(c1, cy(3), ks, 'Shift X', 'translateX');
-  knob(c2, cy(3), ks, 'Shift Y', 'translateY');
-  knob(c1, cy(4), ks, 'Hue Drift', 'hueDrift');
+  knobAt(c1, cy(2), ks, 'Zoom', 'zoom');
+  knobAt(c2, cy(2), ks, 'Rotate', 'rotate');
+  knobAt(c1, cy(3), ks, 'Shift X', 'translateX');
+  knobAt(c2, cy(3), ks, 'Shift Y', 'translateY');
+  knobAt(c1, cy(4), ks, 'Hue Drift', 'hueDrift');
 
-  knob(c2, cy(4), ks, 'Hue', 'hue');
-  knob(c1, cy(5), ks, 'Saturation', 'saturate');
-  knob(c2, cy(5), ks, 'Brightness', 'brightness');
-  knob(c1, cy(6), ks, 'Contrast', 'contrast');
-  knob(c2, cy(6), ks, 'Invert', 'invertAmount');
+  knobAt(c2, cy(4), ks, 'Hue', 'hue');
+  knobAt(c1, cy(5), ks, 'Saturation', 'saturate');
+  knobAt(c2, cy(5), ks, 'Brightness', 'brightness');
+  knobAt(c1, cy(6), ks, 'Contrast', 'contrast');
+  knobAt(c2, cy(6), ks, 'Invert', 'invertAmount');
 
-  ui.keyOn = key(c1 - 36, cy(7) - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  cl(c1, cy(7) + ks / 2 + 15, 120, 'Enable', 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap');
+  var ep = pt(c1, cy(7));
+  ui.keyOn = key(ep[0] - 36, ep[1] - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
+  cl(ep[0], ep[1] + ks / 2 + 15, 120, 'Enable', LABEL);
   syncers.push(syncKeyOn);
-  knob(c2, cy(7), ks, 'Key Hue', 'keyHue', { after: syncKeySwatch });
-  knob(c1, cy(8), ks, 'Key Sat', 'keySat', { after: syncKeySwatch });
-  knob(c2, cy(8), ks, 'Key Light', 'keyLight', { after: syncKeySwatch });
-  knob(c1, cy(9), ks, 'Threshold', 'chromakeyThreshold');
-  knob(c2, cy(9), ks, 'Softness', 'chromakeySoftness');
+  syncKeyOn();
+  knobAt(c2, cy(7), ks, 'Key Hue', 'keyHue', { after: syncKeySwatch });
+  knobAt(c1, cy(8), ks, 'Key Sat', 'keySat', { after: syncKeySwatch });
+  knobAt(c2, cy(8), ks, 'Key Light', 'keyLight', { after: syncKeySwatch });
+  knobAt(c1, cy(9), ks, 'Threshold', 'chromakeyThreshold');
+  knobAt(c2, cy(9), ks, 'Softness', 'chromakeySoftness');
   // A chip of the key colour beside the Chromakey nameplate.
-  ui.keySwatch = el('span', at(RX + 116, B(7) + 8 - 6, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
+  ui.keySwatch = el('span', at(ck[0] + 116, ck[1] - 6, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
   syncKeySwatch();
 }
-function syncKeyOn() { ui.keyOn.set(params.chromakeyEnabled ? 'on' : 'off'); }
+function syncKeyOn() { if (ui.keyOn) ui.keyOn.set(params.chromakeyEnabled ? 'on' : 'off'); }
 function syncKeySwatch() {
   if (!ui.keySwatch) return;
   var c = hslToRgb(params.keyHue, params.keySat, params.keyLight);
@@ -540,29 +585,40 @@ function syncBlendLegend() {
   });
 }
 
-// Background: the layer under the mix, as Hue / Saturation / Lightness faders.
+// Background: the layer under the mix, as Hue / Saturation / Lightness faders (a row along the bottom in portrait,
+// standing vertically down the right edge in landscape, low values at the bottom).
 function buildBackground() {
-  sec(M, BG_Y, SW - 2 * M, BG_B - BG_Y, 'Background', 'bg');
-  var iw = SW - 2 * M - 48, gap = 40, fw = (iw - 2 * gap) / 3, fy = BG_Y + 34;
-  ui.bg = [['Hue', 'bgHue'], ['Saturation', 'bgSat'], ['Lightness', 'bgLight']].map(function (d, i) {
-    return fader(M + 24 + i * (fw + gap), fy, fw, d[0], d[1], { after: syncBgRamps });
-  });
+  var F = [['Hue', 'bgHue'], ['Saturation', 'bgSat'], ['Lightness', 'bgLight']];
+  if (LAND) {
+    var s = [BG_Y, 16, SW - M - BG_Y, SH - M - 16], top = s[1] + 30, gap = 34, len = (s[3] - 30 - 30 - 2 * gap) / 3 - 22;
+    secBox(s, 'Background', 'bg');
+    ui.bg = F.map(function (d, i) { return fader(s[0] + s[2] / 2, top + i * (len + 22 + gap), len, d[0], d[1], { vertical: true, after: syncBgRamps }); });
+  } else {
+    secBox([M, BG_Y, 900 - 2 * M, SH - M - BG_Y], 'Background', 'bg');
+    var iw = 900 - 2 * M - 48, g = 40, fw = (iw - 2 * g) / 3, fy = BG_Y + 34;
+    ui.bg = F.map(function (d, i) { return fader(M + 24 + i * (fw + g), fy, fw, d[0], d[1], { after: syncBgRamps }); });
+  }
   syncBgRamps();
 }
 function syncBgRamps() {
   if (!ui.bg || ui.bg.length < 3) return;
-  var h = params.bgHue, s = Math.round(params.bgSat * 100);
-  ui.bg[0].ramp.style.background = 'linear-gradient(to right,' + [0, 60, 120, 180, 240, 300, 360].map(function (a) { return 'hsl(' + a + ',100%,50%)'; }).join(',') + ')';
-  ui.bg[1].ramp.style.background = 'linear-gradient(to right,hsl(' + h + ',0%,50%),hsl(' + h + ',100%,50%))';
-  ui.bg[2].ramp.style.background = 'linear-gradient(to right,#000,hsl(' + h + ',' + s + '%,50%),#fff)';
+  var h = params.bgHue, s = Math.round(params.bgSat * 100), dir = ui.bg[0].dir;
+  ui.bg[0].ramp.style.background = 'linear-gradient(' + dir + ',' + [0, 60, 120, 180, 240, 300, 360].map(function (a) { return 'hsl(' + a + ',100%,50%)'; }).join(',') + ')';
+  ui.bg[1].ramp.style.background = 'linear-gradient(' + dir + ',hsl(' + h + ',0%,50%),hsl(' + h + ',100%,50%))';
+  ui.bg[2].ramp.style.background = 'linear-gradient(' + dir + ',#000,hsl(' + h + ',' + s + '%,50%),#fff)';
 }
 
-build();
+function wantLand() {
+  if (/landscape/.test(location.hash)) return true;
+  if (/portrait/.test(location.hash)) return false;
+  var v = viewSize(); return v[0] > v[1];
+}
+build(wantLand());
 
 // -------------------------------------------------------------
 // 4. WebGL2 boilerplate + ring-buffer framebuffers
 // -------------------------------------------------------------
-var canvas = ui.canvas;
+var canvas = glCanvas;
 var gl = canvas.getContext('webgl2', { antialias: false });
 if (!gl) {
   el('div', '', ui.screen, 'WebGL2 is not available in this browser, so the visualizer cannot run here.').className = 'gl-error';
@@ -1091,6 +1147,13 @@ function clearScreen() {
   lastWritten = buffers[0];
 }
 
+// After a layout change the render size flips (720 x 1280 <-> 1280 x 720): replace the ring buffers at the new size.
+function resizeTargets() {
+  buffers.forEach(function (b) { gl.deleteFramebuffer(b.fbo); gl.deleteTexture(b.tex); });
+  buffers = createRingBuffers();
+  clearScreen();
+}
+
 function resetAll() {
   Object.assign(params, DEFAULTS);
   syncUI();
@@ -1114,7 +1177,7 @@ function toggleFullscreen() {
     (document.exitFullscreen || document.webkitExitFullscreen).call(document);
   }
 }
-function syncFullscreen() { ui.full.set(currentFullscreenElement() === ui.screen ? 'on' : 'off'); }
+function syncFullscreen() { ui.full.set(currentFullscreenElement() === ui.screen ? 'on' : 'off'); fit(); }
 document.addEventListener('fullscreenchange', syncFullscreen);
 document.addEventListener('webkitfullscreenchange', syncFullscreen);
 
@@ -1124,7 +1187,11 @@ function viewSize() {
   if (v && v.width > 0 && v.height > 0) return [v.width * v.scale, v.height * v.scale];
   return [window.innerWidth, window.innerHeight];
 }
+// Rebuild the panel when the window changes orientation (not while the screen is fullscreen: rebuilding would drop
+// the fullscreen element, so that waits for fullscreenchange).
 function fit() {
+  var land = wantLand();
+  if (land !== LAND && !currentFullscreenElement()) { build(land); resizeTargets(); }
   var v = viewSize(), k = Math.min(v[0] / SW, v[1] / SH);
   stage.dataset.scale = String(k);
   stage.style.transform = 'translate(' + ((v[0] - SW * k) / 2) + 'px,' + ((v[1] - SH * k) / 2) + 'px) scale(' + k + ')';

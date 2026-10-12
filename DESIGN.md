@@ -419,6 +419,22 @@ and 0.05), and the localStorage preset list. The chromakey key colour is now set
 as HSL (converted to RGB in JS). Noise drifts at a fixed rate, so Osc Speed
 moves only the oscillator.
 
+**Landscape layout (2026-10-11).** When the window is wider than tall (or the
+URL hash contains `landscape` / `portrait`), the panel is the same layout
+transposed (rotated 90° clockwise, then flipped horizontally) on a 1472 x 908
+stage. The screen turns 16:9 (rendered at 1280 x 720), the header keys stand in a
+column beside it, Layers and Mix sit to its right, the effect knobs run in two
+rows along the bottom, and the Background faders stand vertically (low values at
+the bottom) down the right edge. The XY pad transposes with the Layers knobs, so
+Camera / Noise are along its top and Osc / Shape along its bottom in landscape. The
+mixer state itself (`mixX`, `mixY`) is orientation-independent. Layout code is
+written in portrait coordinates and `pt()` / `box()` transpose them. The WebGL
+canvas persists across rebuilds; only the ring buffers are recreated at the new
+size. A rotation while fullscreen is applied when fullscreen ends.
+
+Theme: Anodized (brushed-metal grain over a saturated tint per parameter family,
+family-coloured nameplates), chosen from nine candidates.
+
 The rest of this section is the earlier plan, kept for history.
 
 Reuse the existing dark-panel conventions from the sibling projects
