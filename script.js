@@ -88,31 +88,52 @@ function dragValue(target, ctl, range) {
   }, { passive: false });
 }
 
-// Outlined section with its nameplate tab on the top border.
-function sec(x, y, w, h, title) {
+// Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
+// (a .fam-<fam> fill under the outline) and nameplate colour come from the UI scheme in style.css.
+function sec(x, y, w, h, title, fam) {
+  if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:3px;pointer-events:none');
-  nameplate(b, 12, -9, title);
+  nameplate(b, 12, -9, title, fam);
   return b;
 }
-function nameplate(parent, x, y, title) {
-  return el('span', at(x, y) + ';padding:2px 8px;background:' + P.ink + ';color:#19181a;font-size:10px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:14px;white-space:pre', parent, title);
+function nameplate(parent, x, y, title, fam) {
+  var t = el('span', at(x, y) + ';padding:2px 8px;background:' + P.ink + ';color:#19181a;font-size:10px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:14px;white-space:pre', parent, title);
+  if (fam) t.className = 'tab tab-' + fam;
+  return t;
 }
-// Outlined section of any right-angled shape (points clockwise), corners rounded like sec().
-var outlineSvg = null;
-function outline(pts, title, tabX, tabY) {
+// Path through right-angled points (clockwise) with 3 px rounded corners, offset by (ox, oy).
+function roundedPath(pts, ox, oy) {
   var r = 3, d = '';
+  ox = ox || 0; oy = oy || 0;
   for (var i = 0; i < pts.length; i++) {
     var p0 = pts[(i + pts.length - 1) % pts.length], p1 = pts[i], p2 = pts[(i + 1) % pts.length];
     var a = [Math.sign(p1[0] - p0[0]), Math.sign(p1[1] - p0[1])], b = [Math.sign(p2[0] - p1[0]), Math.sign(p2[1] - p1[1])];
-    var s = [p1[0] - a[0] * r, p1[1] - a[1] * r], e = [p1[0] + b[0] * r, p1[1] + b[1] * r];
-    d += (i ? 'L' : 'M') + s[0] + ' ' + s[1] + 'Q' + p1[0] + ' ' + p1[1] + ' ' + e[0] + ' ' + e[1];
+    var s = [p1[0] - a[0] * r - ox, p1[1] - a[1] * r - oy], e = [p1[0] + b[0] * r - ox, p1[1] + b[1] * r - oy];
+    d += (i ? 'L' : 'M') + s[0] + ' ' + s[1] + 'Q' + (p1[0] - ox) + ' ' + (p1[1] - oy) + ' ' + e[0] + ' ' + e[1];
   }
-  var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', d + 'Z');
+  return d + 'Z';
+}
+// The family's surface: a box clipped to the section's shape, behind everything drawn after it.
+function famFill(fam, x, y, w, h, d) {
+  var f = el('div', at(x, y, w, h) + ';pointer-events:none;clip-path:path("' + d + '");-webkit-clip-path:path("' + d + '")');
+  f.className = 'fam fam-' + fam;
+  return f;
+}
+// Outlined section of any right-angled shape (points clockwise), corners rounded like sec().
+function outline(pts, title, tabX, tabY, fam) {
+  var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+  var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys), w = Math.max.apply(null, xs) - x0, h = Math.max.apply(null, ys) - y0;
+  if (fam) famFill(fam, x0, y0, w, h, roundedPath(pts, x0, y0));
+  var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', String(w + 2)); svg.setAttribute('height', String(h + 2)); svg.setAttribute('aria-hidden', 'true');
+  svg.style.cssText = at(x0, y0) + ';overflow:visible;pointer-events:none';
+  var path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', roundedPath(pts, x0, y0));
   path.setAttribute('fill', 'none'); path.setAttribute('stroke', P.inkMute); path.setAttribute('stroke-width', '1');
   path.setAttribute('transform', 'translate(0.5 0.5)');
-  outlineSvg.appendChild(path);
-  nameplate(panel, tabX, tabY - 9, title);
+  svg.appendChild(path);
+  panel.appendChild(svg);
+  nameplate(panel, tabX, tabY - 9, title, fam);
 }
 
 // Knob scale: n ticks spread over the 270-degree sweep (11 by default; stepped knobs get one tick per position).
@@ -319,11 +340,6 @@ var CW = 720, CH = 1280;                                         // render resol
 var ui = {};
 function build() {
   stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
-  var NS = 'http://www.w3.org/2000/svg';
-  outlineSvg = document.createElementNS(NS, 'svg');
-  outlineSvg.setAttribute('width', String(SW)); outlineSvg.setAttribute('height', String(SH)); outlineSvg.setAttribute('aria-hidden', 'true');
-  outlineSvg.style.cssText = 'position:absolute;left:0;top:0;overflow:visible;pointer-events:none';
-  panel.appendChild(outlineSvg);
 
   // Screen: a bezel holding the 9:16 WebGL canvas, no text. Double-click for fullscreen.
   var bez = el('div', at(BEZ[0], BEZ[1], BEZ[2], BEZ[3]) + ';box-sizing:border-box;padding:10px;border-radius:8px;background:#0b0b0c;box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)');
@@ -346,13 +362,30 @@ function build() {
   buildMix();
   buildRight();
   buildBackground();
+  buildSchemeKey();
+}
+
+// TEMPORARY: cycles the surface-texture schemes that tell the parameter families apart (see "UI schemes" in
+// style.css). Remove this key, the fam classes' CSS for the losing schemes, and data-scheme once one is chosen.
+var SCHEMES = [['base', 'Base'], ['plates', 'Plates'], ['hatch', 'Hatch'], ['brushed', 'Brushed'], ['grille', 'Grille']];
+function buildSchemeKey() {
+  var i = 0;
+  try { i = Math.max(0, SCHEMES.map(function (s) { return s[0]; }).indexOf(localStorage.getItem('vfv-ui-scheme'))); } catch (e) { /* storage blocked */ }
+  var apply = function () {
+    stage.dataset.scheme = SCHEMES[i][0];
+    ui.scheme.txt.textContent = 'UI ' + (i + 1) + '/' + SCHEMES.length + ' · ' + SCHEMES[i][1];
+    try { localStorage.setItem('vfv-ui-scheme', SCHEMES[i][0]); } catch (e) { /* storage blocked */ }
+  };
+  ui.scheme = key(BEZ[0] + 18, BEZ[1] + 18, 132, 26, '', null, { fs: 10, aria: 'Cycle UI scheme (temporary)', onClick: function () { i = (i + 1) % SCHEMES.length; apply(); } });
+  ui.scheme.b.style.zIndex = '5';
+  apply();
 }
 
 // Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it.
 var PAD = 238;
 function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
-  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Layers');
+  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Layers', 'layers');
   var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
   // Camera: On (enable) over a Front / Back pair.
   var bw = 104, bx = cx[0] - bw / 2;
@@ -389,7 +422,7 @@ function polygonPath(n) {
 }
 function buildMix() {
   var x = M + 278 + 16, w = LW - 278 - 16;
-  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Mix');
+  sec(x, LOW_Y, w, LOW_B - LOW_Y, 'Mix', 'mix');
   ui.pad = glass(x + (w - PAD) / 2, LOW_Y + 20, PAD, PAD, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
   var g = ui.pad.g;
   g.style.cursor = 'crosshair'; g.style.touchAction = 'none';
@@ -463,10 +496,10 @@ function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2, R2 = RX + RW;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
   var ks = 42;
-  sec(RX, B(0) + 8, RW, B(2) - B(0) - 16, 'Feedback');
-  outline([[RX, B(2) + 8], [R2, B(2) + 8], [R2, B(4) - 8], [mid - 8, B(4) - 8], [mid - 8, B(5) - 8], [RX, B(5) - 8]], 'Transform', RX + 12, B(2) + 8);
-  outline([[mid + 8, B(4) + 8], [R2, B(4) + 8], [R2, B(7) - 8], [RX, B(7) - 8], [RX, B(5) + 8], [mid + 8, B(5) + 8]], 'Color', mid + 20, B(4) + 8);
-  sec(RX, B(7) + 8, RW, B(10) - B(7) - 16, 'Chromakey');
+  sec(RX, B(0) + 8, RW, B(2) - B(0) - 16, 'Feedback', 'feedback');
+  outline([[RX, B(2) + 8], [R2, B(2) + 8], [R2, B(4) - 8], [mid - 8, B(4) - 8], [mid - 8, B(5) - 8], [RX, B(5) - 8]], 'Transform', RX + 12, B(2) + 8, 'transform');
+  outline([[mid + 8, B(4) + 8], [R2, B(4) + 8], [R2, B(7) - 8], [RX, B(7) - 8], [RX, B(5) + 8], [mid + 8, B(5) + 8]], 'Color', mid + 20, B(4) + 8, 'color');
+  sec(RX, B(7) + 8, RW, B(10) - B(7) - 16, 'Chromakey', 'chroma');
 
   ui.blend = knob(c1, cy(0), ks, 'Blend Mode', 'blendMode', { ticks: 4, after: syncBlendLegend });
   blendLegend(c1, cy(0), ui.blend.R);
@@ -524,7 +557,7 @@ function syncBlendLegend() {
 
 // Background: the layer under the mix, as Hue / Saturation / Lightness faders.
 function buildBackground() {
-  sec(M, BG_Y, SW - 2 * M, BG_B - BG_Y, 'Background');
+  sec(M, BG_Y, SW - 2 * M, BG_B - BG_Y, 'Background', 'bg');
   var iw = SW - 2 * M - 48, gap = 40, fw = (iw - 2 * gap) / 3, fy = BG_Y + 34;
   ui.bg = [['Hue', 'bgHue'], ['Saturation', 'bgSat'], ['Lightness', 'bgLight']].map(function (d, i) {
     return fader(M + 24 + i * (fw + gap), fy, fw, d[0], d[1], { after: syncBgRamps });
@@ -1122,7 +1155,7 @@ fit();
 // feedback loop directly, then report.
 // Parameters can be overridden in the hash, e.g. #shot&feedback=0&mixX=1.
 if (location.hash.indexOf('#shot') === 0) {
-  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] in params) params[p[0]] = parseFloat(p[1]); });
+  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] === 'scheme') stage.dataset.scheme = p[1]; else if (p[0] in params) params[p[0]] = parseFloat(p[1]); });
   syncUI();
   var n = 0;
   for (; n < 150; n++) { simTime += 1 / 60; renderFeedbackPass(simTime); }
