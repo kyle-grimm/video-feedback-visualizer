@@ -89,7 +89,7 @@ function dragValue(target, ctl, range) {
 }
 
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
-// (a .fam-<fam> fill under the outline) and nameplate colour come from the UI scheme in style.css.
+// (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:3px;pointer-events:none');
@@ -364,24 +364,6 @@ function build() {
   buildMix();
   buildRight();
   buildBackground();
-  buildSchemeKey();
-}
-
-// TEMPORARY: cycles the surface-texture schemes that tell the parameter families apart (see "UI schemes" in
-// style.css). Remove this key, the fam classes' CSS for the losing schemes, and data-scheme once one is chosen.
-var SCHEMES = [['base', 'Base'], ['plates', 'Plates'], ['hatch', 'Hatch'], ['brushed', 'Brushed'], ['grille', 'Grille'],
-  ['anodized', 'Anodized'], ['inlay', 'Inlay'], ['spun', 'Spun'], ['engraved', 'Engraved']];
-function buildSchemeKey() {
-  var i = 0;
-  try { i = Math.max(0, SCHEMES.map(function (s) { return s[0]; }).indexOf(localStorage.getItem('vfv-ui-scheme'))); } catch (e) { /* storage blocked */ }
-  var apply = function () {
-    stage.dataset.scheme = SCHEMES[i][0];
-    ui.scheme.txt.textContent = 'UI ' + (i + 1) + '/' + SCHEMES.length + ' · ' + SCHEMES[i][1];
-    try { localStorage.setItem('vfv-ui-scheme', SCHEMES[i][0]); } catch (e) { /* storage blocked */ }
-  };
-  ui.scheme = key(BEZ[0] + 18, BEZ[1] + 18, 132, 26, '', null, { fs: 10, aria: 'Cycle UI scheme (temporary)', onClick: function () { i = (i + 1) % SCHEMES.length; apply(); } });
-  ui.scheme.b.style.zIndex = '5';
-  apply();
 }
 
 // Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it.
@@ -1158,7 +1140,7 @@ fit();
 // feedback loop directly, then report.
 // Parameters can be overridden in the hash, e.g. #shot&feedback=0&mixX=1.
 if (location.hash.indexOf('#shot') === 0) {
-  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] === 'scheme') stage.dataset.scheme = p[1]; else if (p[0] in params) params[p[0]] = parseFloat(p[1]); });
+  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] in params) params[p[0]] = parseFloat(p[1]); });
   syncUI();
   var n = 0;
   for (; n < 150; n++) { simTime += 1 / 60; renderFeedbackPass(simTime); }
