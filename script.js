@@ -91,17 +91,18 @@ function dragValue(target, ctl, range) {
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
 var SEC_R = 3; // section corner radius (design mode can change it)
-// Control and label scale for the makers below: 1 by default; the portrait built-in layout sets 1.2 and 2.
+// Control and label scale for the makers below (labels include the section nameplates): 1 by default; the portrait
+// built-in layout sets 1.2 and 2.
 var UK = 1, UL = 1;
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:' + SEC_R + 'px;pointer-events:none');
   if (fam) { b.className = 'frame frame-' + fam; b.dataset.fam = fam; }
-  b.tab = nameplate(b, 12, -9, title, fam);
+  b.tab = nameplate(b, UL > 1 ? 8 : 12, -9 * UL, title, fam);   // 2x nameplates sit closer in, to fit narrow windows
   return b;
 }
 function nameplate(parent, x, y, title, fam) {
-  var t = el('span', at(x, y) + ';padding:2px 8px;background:' + P.ink + ';color:#19181a;font-size:10px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:14px;white-space:pre', parent, title);
+  var t = el('span', at(x, y) + ';padding:' + 2 * UL + 'px 8px;background:' + P.ink + ';color:#19181a;font-size:' + 10 * UL + 'px;font-weight:800;letter-spacing:' + (UL > 1 ? 0.1 : 0.16) + 'em;text-transform:uppercase;line-height:' + 14 * UL + 'px;white-space:pre', parent, title);
   if (fam) { t.className = 'tab tab-' + fam; t.dataset.fam = fam; }
   return t;
 }
@@ -395,19 +396,103 @@ function build() {
   if (window.onPanelBuilt) window.onPanelBuilt();
 }
 
+// Portrait (900 x 1336), controls 1.2x and labels 2x (UK / UL), spaced regularly: each window spreads its controls
+// with equal gaps between them and to its edges (by their measured extents, labels included; the top edge is the
+// nameplate's bottom), and the right column's windows are sized so that gap is the same in all of them. Windows sit
+// PG apart (plus a nameplate's overhang), the header keys PG from the screen above and the Layers nameplate below,
+// and the XY pad PG inside the top, right and bottom edges of Layers.
+var PG = 14, fontsRebuild = false;
+function buildPortraitPanel() {
+  UK = 1.2; UL = 2;
+  var ks = 42 * UK, tab = 9 * UL, top0 = 26;
+  var kg = 8, kw = (LW - 5 * kg) / 6, kh = 28 * UK, ky = BEZ[1] + BEZ[3] + PG, rects = [];
+  for (var i = 0; i < 6; i++) rects.push([M + i * (kw + kg), ky, kw, kh]);
+  makeKeys(rects, 10 * UL);
+
+  // Layers: the pad square against the right edge, the four layer controls in a 2 x 2 grid left of it.
+  var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG;
+  secBox(lay, 'Layers', 'layers');
+  makePad(M + LW - PG - pad, ly + PG, pad);
+  gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'speed'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
+
+  // Right column: one vertical gap g shared by every window.
+  var wins = [['feedback', [['blendMode', 'modulateAmount'], ['feedback', 'delay']]],
+              ['chroma', [['keyOn', 'keyHue'], ['keySat', 'keyLight'], ['chromakeyThreshold', 'chromakeySoftness']]],
+              ['transform', [['zoom'], ['rotate'], ['translateX'], ['translateY'], ['hueDrift']]],
+              ['color', [['hue'], ['saturate'], ['brightness'], ['contrast'], ['invertAmount']]]];
+  var hs = wins.map(function (w) { return gridSize(w[1], ks); });
+  var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc], sep = PG + tab;
+  var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
+  var g = (LOW_B - top0 - used) / stack.reduce(function (a, z) { return a + z.n + 1; }, 0);
+  var hOf = function (z) { return tab + z.h + (z.n + 1) * g; };
+  var y = top0, fb = [RX, y, RW, hOf(hs[0])];
+  y += fb[3] + sep; var ck = [RX, y, RW, hOf(hs[1])];
+  y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
+  [fb, ck, tr, co].forEach(function (b, k) {
+    var fam = wins[k][0];
+    secBox(b, SECTIONS[fam].title, fam);
+    gridIn(b, wins[k][1], ks, fam);
+  });
+  makeSwatch(ck[0] + 8 + textW(SECTIONS.chroma.title, 10 * UL, 800, 0.1) + 16 + 10, ck[1] - 6 * UK);
+
+  // Text is measured for the spacing; once the web font arrives, measure again.
+  if (document.fonts && document.fonts.status !== 'loaded' && !fontsRebuild) {
+    fontsRebuild = true;
+    document.fonts.ready.then(function () { if (!currentFullscreenElement()) { build(); scaleStage(); } });
+  }
+}
+var measureCtx = null;
+function textW(t, px, weight, ls) {
+  measureCtx = measureCtx || document.createElement('canvas').getContext('2d');
+  measureCtx.font = weight + ' ' + px + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
+  return measureCtx.measureText(String(t).toUpperCase()).width + String(t).length * ls * px;
+}
+// A control's extent around its centre: width, and height above (top) and below (bot), label included.
+function itemExt(id, ks) {
+  var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
+  if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 34 * UK, bot: 35 + 20 * (UK - 1) + lab };
+  if (id === 'keyOn') return { w: Math.max(72 * UK, lw('Enable')), top: 14 * UK, bot: ks / 2 + 13 + lab };
+  var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab };
+  if (id === 'blendMode') {   // the legend around the ring
+    var d = (R + 7 * UK) * Math.SQRT1_2, name = Math.max.apply(null, BLEND_NAMES.map(function (n) { return textW(n, 9 * UL, 800, 0.12); }));
+    e.w = Math.max(e.w, 2 * (d + name)); e.top = d + 6 * UL;
+  }
+  return e;
+}
+// Column widths, row extents and total row height of a grid of control ids (rows of columns).
+function gridSize(grid, ks) {
+  var z = { cw: [], rt: [], rb: [], h: 0, n: grid.length };
+  grid.forEach(function (row, r) {
+    row.forEach(function (id, c) {
+      var e = itemExt(id, ks);
+      z.cw[c] = Math.max(z.cw[c] || 0, e.w); z.rt[r] = Math.max(z.rt[r] || 0, e.top); z.rb[r] = Math.max(z.rb[r] || 0, e.bot);
+    });
+    z.h += z.rt[r] + z.rb[r];
+  });
+  return z;
+}
+// Starts of boxes of the given sizes spread over [lo, hi] with equal gaps between them and at both ends.
+function spread(lo, hi, sizes) {
+  var g = (hi - lo - sizes.reduce(function (a, v) { return a + v; }, 0)) / (sizes.length + 1), p = lo + g;
+  return sizes.map(function (v) { var at0 = p; p += v + g; return at0; });
+}
+// Place a grid of controls in window b = [x, y, w, h], below its nameplate.
+function gridIn(b, grid, ks, fam) {
+  var z = gridSize(grid, ks);
+  var xs = spread(b[0], b[0] + b[2], z.cw), ys = spread(b[1] + 9 * UL, b[1] + b[3], z.rt.map(function (t, r) { return t + z.rb[r]; }));
+  grid.forEach(function (row, r) { row.forEach(function (id, c) { makeItem(id, xs[c] + z.cw[c] / 2, ys[r] + z.rt[r], ks, { fam: fam }); }); });
+}
+
 function buildDefault(land) {
   LAND = land; PAD_T = land;
-  if (!LAND) { UK = 1.2; UL = 2; }   // portrait: controls 1.2x, labels 2x
   SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
   var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
   makeScreen(b[0], b[1], b[2], b[3]);
-  // Header keys: a row under the screen (portrait) or a column beside it (landscape).
-  var kn = 6, kg = LAND ? 10 : 6, rects = [];
-  for (var i = 0; i < kn; i++) {
-    if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]); }
-    else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y - 6, kw, 28 * UK]); }
-  }
-  makeKeys(rects, LAND ? 9 : 10 * UL);
+  if (!LAND) return buildPortraitPanel();
+  // Header keys: a column beside the screen.
+  var kn = 6, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
+  for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
+  makeKeys(rects, 9);
   buildLayers();
   buildMix();
   buildRight();
@@ -419,9 +504,9 @@ var PAD = 238;
 function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
   secBox(box(x, LOW_Y, LW, LOW_B - LOW_Y), 'Layers', 'layers');
-  var cx = UK > 1 ? [x + 84, x + 230] : [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
+  var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
   [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
-    var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40 * UK, { fam: 'layers' });
+    var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40, { fam: 'layers' });
   });
 }
 
@@ -528,19 +613,7 @@ function drawPad() {
 function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
-  var ks = 42 * UK;
-  if (UK > 1) {
-    // Enlarged controls: spread each section's rows between its nameplate and its bottom edge instead of centring
-    // them in the ten equal rows. A control spans R above its centre and R + 3 + 20 (label) below.
-    var R = ks / 2 + 10, rowsIn = function (k0, k1, top) {
-      var a = B(k0) + 8 + 13 + top, b = B(k1) - 8 - 6 - (R + 23), n = k1 - k0, out = [];
-      for (var r = 0; r < n; r++) out.push(n > 1 ? a + (b - a) * r / (n - 1) : a);
-      return out;
-    };
-    var ys = [].concat(rowsIn(0, 2, R + 7.5), rowsIn(2, 5, R), rowsIn(5, 10, R));   // Blend Mode's legend rises 7.5 above its ring
-    cy = function (i) { return ys[i]; };
-    c1 += 8;   // room for Blend Mode's left legend (also keeps the left column clear of the nameplates)
-  }
+  var ks = 42;
   secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), 'Feedback', 'feedback');
   var ck = box(RX, B(2) + 8, RW, B(5) - B(2) - 16);
   secBox(ck, 'Chromakey', 'chroma');

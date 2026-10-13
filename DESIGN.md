@@ -671,3 +671,17 @@ fullscreen, no overlay). Not yet tried on a real phone.
 
 Update (2026-10-12): portrait controls reduced by 20%, from 1.5x to 1.2x (`UK = 1.2`; knobs 50 px, Layers 48 px,
 header keys 34 px tall). Labels stay 2x. The fitting rules above are unchanged.
+
+## 16. Regular portrait spacing, 2x nameplates (2026-10-12)
+
+`buildPortraitPanel` replaces the fitted ten-row grid. Every window spreads its controls with equal gaps between
+them and to its edges, horizontally and vertically (space-evenly), using each control's measured extent: ring or
+key cluster plus label, and Blend Mode's legend. Label widths come from `textW` (canvas `measureText` in the panel
+font plus letter-spacing), and the panel is rebuilt once when the web font finishes loading. The vertical top edge
+of a window is its nameplate's bottom. The right column's windows (Feedback, Chromakey, Transform | Color) are
+sized so that vertical gap is the same in all of them (about 19 px). Windows sit `PG` = 14 px apart plus the
+nameplate overhang; the header keys sit 14 px below the screen and 14 px above the Layers nameplate; the XY pad
+sits 14 px inside the top, right and bottom edges of Layers (so it is now about 210 px), with the four layer controls
+spread evenly to its left.
+Nameplates are 2x in portrait (20 px). To fit the 146 px Transform window they sit 8 px in (12 at 1x), with 8 px
+side padding and 0.1em letter-spacing (0.16em at 1x). Landscape and design mode are unchanged.
