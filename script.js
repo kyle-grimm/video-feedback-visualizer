@@ -91,17 +91,15 @@ function dragValue(target, ctl, range) {
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
 var SEC_R = 3; // section corner radius (design mode can change it)
-// Control and label scale for the makers below: 1 by default; the portrait built-in layout sets 1.5 and 2.
-var UK = 1, UL = 1;
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:' + SEC_R + 'px;pointer-events:none');
   if (fam) { b.className = 'frame frame-' + fam; b.dataset.fam = fam; }
-  b.tab = nameplate(b, 12, -9 * UL, title, fam);
+  b.tab = nameplate(b, 12, -9, title, fam);
   return b;
 }
 function nameplate(parent, x, y, title, fam) {
-  var t = el('span', at(x, y) + ';padding:' + 2 * UL + 'px ' + 8 * UL + 'px;background:' + P.ink + ';color:#19181a;font-size:' + 10 * UL + 'px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:' + 14 * UL + 'px;white-space:pre', parent, title);
+  var t = el('span', at(x, y) + ';padding:2px 8px;background:' + P.ink + ';color:#19181a;font-size:10px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:14px;white-space:pre', parent, title);
   if (fam) { t.className = 'tab tab-' + fam; t.dataset.fam = fam; }
   return t;
 }
@@ -146,7 +144,7 @@ function knob(x, y, size, label, key, o) {
   el('div', 'position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 45% 35%,#3b393e 0%,#201f22 60%,#161517 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.10)', skirt).className = 'knob-cap';
   var ptr = el('div', 'position:absolute;inset:0', skirt);
   el('div', 'position:absolute;left:50%;top:4%;width:2px;height:42%;margin-left:-1px;border-radius:1px;background:' + P.ink, ptr).className = 'knob-ptr';
-  var lab = el('span', 'margin-top:5px;font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
+  var lab = el('span', 'margin-top:5px;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
   lab.className = 'knob-label';
   var k = {
     v: 0, R: R, steps: steps(d), def: toV(d, d.def),
@@ -178,7 +176,7 @@ function key(x, y, w, h, label, led, o) {
   if (tint) led = null;
   var b = el('button', at(x, y, w, h) + ';box-sizing:border-box;padding:' + (led != null ? '6px' : '0') + ' 0 0;border:none;border-radius:5px;' +
     'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09);' +
-    'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
+    'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
   b.type = 'button'; b.setAttribute('aria-label', o.aria || label); b.className = tint ? 'key key-tint' : 'key';
   var ledEl = el('span', 'position:absolute;left:50%;top:5px;width:10px;height:3px;margin-left:-5px;border-radius:2px', b);
   var txt = el('span', '', b, o.glyph || label || '');
@@ -278,13 +276,13 @@ function hslToRgb(h, s, l) {
 // controls. The built-in layouts (buildDefault) and design mode (design.js, through layoutEngine) both use them.
 //
 // Built-in layouts, chosen by the window's shape (or #portrait / #landscape in the URL):
-// Portrait, 900 x 1592 (buildPortrait): controls 1.5x and labels 2x the base size (UK / UL). The 9:16 screen top left;
-// beside it Layers (the XY mixer inside, each layer's control beside its pad corner) and Feedback; under it, full
-// width, the header keys, then Chromakey, Transform and Color as rows.
-// Landscape, 1336 x 908, base sizes: the earlier 900 x 1336 portrait panel rotated 90 degrees clockwise and flipped
-// horizontally (a transpose). The screen stays top left but turns 16:9, the header keys stand in a column to its
-// right, Layers and Mix sit right of that, the effect knobs run in two rows along the bottom. Its constants below are
-// written in those portrait coordinates; pt() and box() transpose them (y gains 8 so the top nameplates clear the edge).
+// Portrait, 900 x 1336: the 9:16 screen top left with the header keys under it, the Layers knobs and XY Mix pad below
+// that, and the effect knobs in two columns down the right.
+// Landscape, 1336 x 908: the same panel rotated 90 degrees clockwise and flipped horizontally (a transpose). The screen
+// stays top left but turns 16:9, the header keys stand in a column to its right, Layers and Mix sit right of that, the
+// effect knobs run in two rows along the bottom.
+// Written in portrait coordinates; pt() and box() transpose them for landscape (y gains 8 so the top nameplates clear
+// the edge).
 // -------------------------------------------------------------
 var M = 8;
 var LW = 560, RX = M + LW + 16, RW = 900 - M - RX;               // left column (screen) and right column (knobs)
@@ -296,7 +294,7 @@ var PAD_T = false;                                               // XY pad drawn
 function pt(x, y) { return LAND ? [y, x + 8] : [x, y]; }
 function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
 function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
-function LABEL() { return 'font-size:' + 10 * UL + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap'; }
+var LABEL = 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap';
 
 // Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
 var CONTROLS = {
@@ -346,18 +344,18 @@ function makeKeys(r, fs) {
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
 function makeCamera(cx, cy) {
-  var k = UK, bw = 104 * k, bx = cx - bw / 2;
-  ui.camOn = key(bx, cy - 34 * k, bw, 26 * k, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
+  var bw = 104, bx = cx - bw / 2;
+  ui.camOn = key(bx, cy - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
   ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + i * (bw / 2 + 2), cy - 2 * k, bw / 2 - 2, 22 * k, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+    return key(bx + i * (bw / 2 + 2), cy - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
   });
-  cl(cx, cy + 35 * k, 120 * UL, 'Camera', LABEL()).className = 'knob-label';
+  cl(cx, cy + 35, 120, 'Camera', LABEL).className = 'knob-label';
   syncCam();
 }
 // Chromakey On key centred on (cx, cy), label where a knob of size ks would put it.
 function makeChromaOn(cx, cy, ks) {
-  ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  cl(cx, cy + ks / 2 + 15, 120 * UL, 'Enable', LABEL()).className = 'knob-label';
+  ui.keyOn = key(cx - 36, cy - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
+  cl(cx, cy + ks / 2 + 15, 120, 'Enable', LABEL).className = 'knob-label';
   syncers.push(syncKeyOn);
   syncKeyOn();
 }
@@ -373,7 +371,7 @@ function makeItem(id, cx, cy, size, o) {
 }
 // A chip of the key colour, usually beside the Chromakey nameplate.
 function makeSwatch(x, y) {
-  ui.keySwatch = el('span', at(x, y, 26 * UK, 12 * UK) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
+  ui.keySwatch = el('span', at(x, y, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
   syncKeySwatch();
 }
 
@@ -384,7 +382,6 @@ function layoutKey() { return layoutEngine ? layoutEngine.key() : (wantLand() ? 
 var ui = {};
 function build() {
   hideTip(); panel.innerHTML = ''; syncers = []; ui = {}; SEC_R = 3; PAD_T = false;
-  UK = 1; UL = 1;
   builtKey = layoutKey();
   if (layoutEngine) layoutEngine.build(); else buildDefault(wantLand());
   stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
@@ -396,56 +393,20 @@ function build() {
 }
 
 function buildDefault(land) {
-  if (!land) return buildPortrait();
-  LAND = true; PAD_T = true;
-  SW = LOW_B + 8; SH = 908; CW = 1280; CH = 720;
+  LAND = land; PAD_T = land;
+  SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
   var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
   makeScreen(b[0], b[1], b[2], b[3]);
-  // Header keys: a column beside the screen.
-  var kn = 6, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
-  for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
-  makeKeys(rects, 9);
+  // Header keys: a row under the screen (portrait) or a column beside it (landscape).
+  var kn = 6, kg = 10, rects = [];
+  for (var i = 0; i < kn; i++) {
+    if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]); }
+    else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y, kw, 28]); }
+  }
+  makeKeys(rects, LAND ? 9 : 10);
   buildLayers();
   buildMix();
   buildRight();
-}
-
-// Portrait, 900 x 1592, with controls at 1.5x and labels at 2x the base size. Beside the screen: Layers, holding the
-// XY mixer with each layer's control beside its corner of the pad (Camera and Osc above, Noise and Shape below), then
-// Feedback. Under the screen, full width: the header keys, then Chromakey, Transform and Color as rows.
-function buildPortrait() {
-  LAND = false; PAD_T = false; UK = 1.5; UL = 2;
-  SW = 900; SH = 1592; CW = 720; CH = 1280;
-  var ks = 42 * UK, R = ks / 2 + 10, W = SW - 2 * M;
-  makeScreen(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
-  var kn = 6, kg = 10, kw = (W - (kn - 1) * kg) / kn, rects = [];
-  for (var i = 0; i < kn; i++) rects.push([M + i * (kw + kg), KEY_Y, kw, 28 * UK]);
-  makeKeys(rects, 10 * UL);
-
-  // Layers: two control rows around the pad.
-  var lay = [RX, 26, RW, 577], pad = RW - 24, padY = 186;
-  secBox(lay, 'Layers', 'layers');
-  makePad(RX + 12, padY, pad);
-  var lx = [RX + RW / 4 + 6, RX + 3 * RW / 4], ly = [100, padY + pad + 52];
-  [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
-    makeItem(d[0], lx[d[1]], ly[d[2]], 40 * UK, { fam: 'layers' });
-  });
-
-  // Feedback: 2 x 2, the left column moved in so Blend Mode's legend clears the edge.
-  var fbY = lay[1] + lay[3] + 30;
-  secBox([RX, fbY, RW, BEZ[1] + BEZ[3] - fbY], 'Feedback', 'feedback');
-  var fx = [RX + 88, RX + 238], fy = [fbY + 87, fbY + 247];
-  SECTIONS.feedback.items.forEach(function (id, i) { makeItem(id, fx[i % 2], fy[i >> 1], ks, { fam: 'feedback' }); });
-
-  // Bands: one row of controls each.
-  var y = KEY_Y + 28 * UK + 30, bh = 148;
-  ['chroma', 'transform', 'color'].forEach(function (fam) {
-    var items = SECTIONS[fam].items, n = items.length;
-    secBox([M, y, W, bh], SECTIONS[fam].title, fam);
-    items.forEach(function (id, j) { makeItem(id, M + W * (j + 0.5) / n, y + 22 + R, ks, { fam: fam }); });
-    if (fam === 'chroma') makeSwatch(M + 12 + 90 * UL, y - 6 * UK);
-    y += bh + 30;
-  });
 }
 
 // Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape).
@@ -495,7 +456,6 @@ function buildMix() {
 // XY pad: a square glass screen of side `size` at (x, y).
 function makePad(x, y, size) {
   ui.pad = glass(x, y, size, size, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
-  ui.pad.ks = UK; ui.pad.ls = UL;
   var g = ui.pad.g;
   g.style.cursor = 'crosshair'; g.style.touchAction = 'none';
   g.setAttribute('role', 'slider'); g.tabIndex = 0;
@@ -517,46 +477,44 @@ function makePad(x, y, size) {
 }
 function drawPad() {
   var p = ui.pad; if (!p) return;
-  var c = p.x, w = p.w, h = p.h, wt = mixWeights(), q = w / 2, ks = p.ks || 1, ls = p.ls || 1;
+  var c = p.x, w = p.w, h = p.h, wt = mixWeights(), q = w / 2;
   c.clearRect(0, 0, w, h);
   // Centre axes with quarter ticks.
   c.strokeStyle = 'rgba(143,141,146,0.35)'; c.lineWidth = 2;
   c.beginPath(); c.moveTo(q, 0); c.lineTo(q, h); c.moveTo(0, h / 2); c.lineTo(w, h / 2);
-  [0.25, 0.75].forEach(function (f) { c.moveTo(f * w, h / 2 - 8 * ks); c.lineTo(f * w, h / 2 + 8 * ks); c.moveTo(q - 8 * ks, f * h); c.lineTo(q + 8 * ks, f * h); });
+  [0.25, 0.75].forEach(function (f) { c.moveTo(f * w, h / 2 - 8); c.lineTo(f * w, h / 2 + 8); c.moveTo(q - 8, f * h); c.lineTo(q + 8, f * h); });
   c.stroke();
   // Layer glyphs, brighter the more of that layer is in the mix.
   var icons = [PAD_ICONS.camera, PAD_ICONS.osc, PAD_ICONS.noise, polygonPath(Math.round(params.shapeSides))];
   var names = ['Camera', 'Osc', 'Noise', 'Shape'];
   icons.forEach(function (d, i) {
     var col = PAD_T ? Math.floor(i / 2) : i % 2, row = PAD_T ? i % 2 : Math.floor(i / 2);
-    // Icon: half a quadrant, kept clear of the corner label block (58 px tall at label scale 1).
-    var ox = col * q, oy = row * q, s = q * 0.5 / 100, lb = 58 * ls;
-    var iy = ls === 1 ? q * 0.27 : row ? q - lb - 6 - q * 0.5 : lb + 6;
+    var ox = col * q, oy = row * q, s = q * 0.5 / 100;
     c.save();
     c.globalAlpha = 0.22 + 0.78 * wt[i];
-    c.translate(ox + q * 0.25, oy + iy); c.scale(s, s);
+    c.translate(ox + q * 0.25, oy + q * 0.27); c.scale(s, s);
     c.strokeStyle = ICON_GREEN; c.lineWidth = (i === 2 ? 1.6 : 2.4) / s * 1.2; c.lineJoin = 'round'; c.lineCap = 'round';
     c.shadowColor = 'rgba(63,191,106,0.7)'; c.shadowBlur = 6;
     c.stroke(new Path2D(d));
     c.restore();
     // Corner label and its share of the mix.
-    var right = col === 1, bottom = row === 1, tx = right ? w - 14 * ls : 14 * ls;
+    var right = col === 1, bottom = row === 1, tx = right ? w - 14 : 14;
     c.textAlign = right ? 'right' : 'left';
-    c.font = '800 ' + 17 * ls + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
+    c.font = '800 17px "Barlow Semi Condensed", "Segoe UI", sans-serif';
     c.fillStyle = P.inkMute;
-    c.fillText(names[i].toUpperCase() + (i === 0 && !cam.stream ? ' (OFF)' : ''), tx, bottom ? h - 34 * ls : 28 * ls);
-    c.font = '700 ' + 19 * ls + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
+    c.fillText(names[i].toUpperCase() + (i === 0 && !cam.stream ? ' (OFF)' : ''), tx, bottom ? h - 34 : 28);
+    c.font = '700 19px "Barlow Semi Condensed", "Segoe UI", sans-serif';
     c.fillStyle = P.accent;
-    c.fillText(Math.round(wt[i] * 100) + '%', tx, bottom ? h - 12 * ls : 50 * ls);
+    c.fillText(Math.round(wt[i] * 100) + '%', tx, bottom ? h - 12 : 50);
   });
   // Puck with crosshair.
   var pp = mixToPad(), px = pp[0] * w, py = pp[1] * h;
   c.strokeStyle = 'rgba(220,232,255,0.28)'; c.lineWidth = 2; c.setLineDash([6, 8]);
   c.beginPath(); c.moveTo(px, 0); c.lineTo(px, h); c.moveTo(0, py); c.lineTo(w, py); c.stroke(); c.setLineDash([]);
   c.shadowColor = P.accentGlow; c.shadowBlur = 10;
-  c.strokeStyle = P.accent; c.lineWidth = 4 * ks;
-  c.beginPath(); c.arc(px, py, 16 * ks, 0, TAU); c.stroke();
-  c.fillStyle = P.accent; c.beginPath(); c.arc(px, py, 5 * ks, 0, TAU); c.fill();
+  c.strokeStyle = P.accent; c.lineWidth = 4;
+  c.beginPath(); c.arc(px, py, 16, 0, TAU); c.stroke();
+  c.fillStyle = P.accent; c.beginPath(); c.arc(px, py, 5, 0, TAU); c.fill();
   c.shadowBlur = 0;
   p.g.setAttribute('aria-valuetext', names.map(function (n, i) { return n + ' ' + Math.round(wt[i] * 100) + '%'; }).join(', '));
 }
@@ -592,9 +550,8 @@ function syncKeySwatch() {
 // Blend Mode positions printed around its knob like a rotary switch; tap a name to pick it.
 function blendLegend(x, y, R) {
   ui.blendLabs = BLEND_NAMES.map(function (n, i) {
-    var a = (-135 + i * 90) * Math.PI / 180, r = R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a), left = i < 2;
-    var bw = 40 * UL, bh = 12 * UL;
-    var s = el('span', at(left ? lx - bw : lx, ly - bh / 2, bw, bh) + ';text-align:' + (left ? 'right' : 'left') + ';' + PRINT(9 * UL) + ';cursor:pointer', panel, n);
+    var a = (-135 + i * 90) * Math.PI / 180, r = R + 7, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a), left = i < 2;
+    var s = el('span', at(left ? lx - 40 : lx, ly - 6, 40, 12) + ';text-align:' + (left ? 'right' : 'left') + ';' + PRINT(9) + ';cursor:pointer', panel, n);
     s.addEventListener('click', function () { ui.blend.set(i / 3); });
     return s;
   });
