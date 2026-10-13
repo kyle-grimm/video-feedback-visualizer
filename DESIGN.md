@@ -636,3 +636,24 @@ MP4 box layout, `avcC` profile and level, sample count, and what a `<video>` ele
 dense). Clicking Record, then Stop, through the real render loop produced a file that Windows reports as
 720 x 1280, 60.00 fps, H.264. The MediaRecorder fallback produced an H.264 .mp4 at 720 x 1280. Not yet tried on
 phones (iOS Safari has WebCodecs H.264 from 16.4; downloads there go through the Files prompt).
+
+## 13. Larger portrait controls (2026-10-12)
+
+The portrait built-in layout (`buildPortrait`) draws controls at 1.5x and labels at 2x the base size: knobs 63 px
+(Layers 60), keys 42 px tall, knob labels, key text and nameplates 20 px, Blend Mode legend 18 px, and in the XY
+pad the corner labels at 2x and the puck at 1.5x. The makers read two globals, `UK` (control scale) and `UL` (label
+scale), which `build()` resets to 1, so landscape and design-mode layouts are unchanged.
+
+The bigger parts don't fit the old 900 x 1336 arrangement (two 154 px knob columns beside the screen for all ten
+rows), so the panel was rearranged. The stage stays 900 wide and grows to 1592 tall. On a phone held upright the
+stage is limited by width either way, so the new sizes show at their full 1.5x / 2x there.
+- Beside the screen: **Layers, now holding the XY mixer** (the separate Mix section is gone in portrait). Camera
+  and Osc Speed sit above the pad, Noise Scale and Shape Sides below it, each next to the pad corner it mixes.
+  Then Feedback, 2 x 2.
+- Under the screen, full width: the six header keys, then Chromakey (1 x 6), Transform (1 x 5) and Color (1 x 5)
+  as rows. Chromakey stays above Transform; Transform and Color are now stacked rows rather than side-by-side
+  columns, as in landscape.
+- The pad is 284 px (1.19x), the most the 308 px right column allows.
+
+Design mode still treats Layers and Mix as separate blocks, and its built-in portrait genome still describes the
+old arrangement; both only matter when design mode is opened with `#design`.
