@@ -556,3 +556,46 @@ into them or, conversely, forget they were considered:
   `webglcontextlost`/`webglcontextrestored` handler that recreates the FBOs is
   worth having even in v1, since a lost context otherwise means a frozen black
   canvas with no obvious cause.
+
+## 11. Performance (analysis and optimizations, 2026-10-12)
+
+Measured with the `index.html#bench` hook. It reports ms per frame for several settings, GPU memory held by the
+feedback history, uniform-upload and main-thread costs, and an output fingerprint: a hash of every pixel after 60
+deterministic frames, so a change can be checked for identical output. Run it in headless Chrome on the real GPU
+(`--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`). SwiftShader (the software fallback) executes every
+branch of the shader, so it badly misjudges the branch-skipping costs.
+
+Baseline on a GTX 1070: the feedback pass took about 0.25 ms per frame at 720 x 1280 (0.11 ms with only the
+oscillator; the noise layer is the costliest at about 0.12 ms), the display blit about 0.02 ms, the uniform upload
+about 2 us, a Mix pad redraw about 0.1 ms and a full panel rebuild about 2.7 ms. So on desktop the per-frame GPU
+work is small. What actually cost something:
+
+- **Refresh rate.** The loop rendered every animation frame, and zoom / rotate / drift / hue drift are per frame,
+  so 120 / 144 Hz displays did 2-2.4x the GPU work *and* ran the visuals that much faster than designed. Now
+  rendering is scheduled on a fixed 60 Hz grid (every frame at 60 / 59.94 Hz, an even 60 at 90-240 Hz; simulated
+  across refresh rates with timestamp jitter).
+- **Memory.** The 32-slot feedback history was allocated up front: 112.5 MB of GPU memory, a real risk of context
+  loss on phones, while Delay is usually 0. It now starts at 2 slots (7 MB) and doubles only when Delay needs more
+  (8 slots for a delay of 5). Existing history keeps its order and new slots start as copies of the oldest frame.
+  Output is bit-identical to the old ring (same fingerprints, including with Delay set).
+- **Camera.** The 1280 x 720 video frame was re-uploaded on every render frame (twice per camera frame at 60 fps,
+  more at higher refresh rates), and also while the Camera layer had no weight in the mix. Now it uploads only
+  when a new video frame has arrived (`requestVideoFrameCallback`, with a `currentTime` fallback) and the layer is
+  in the mix, and same-size frames go through `texSubImage2D` instead of reallocating the texture.
+- **Canvas.** The context is created with `alpha: false, depth: false, stencil: false`: every pixel is opaque and
+  nothing is depth tested, so the compositor can treat the canvas as opaque, and no canvas-sized depth buffer is
+  allocated or cleared.
+- **Shader.** The camera layer is skipped while the camera is off (the default mix gives it 19% weight).
+  Hue / Hue Drift of exactly 0 skip the HSV round trip and just clamp. Hue defaults to 0, so that rotation is
+  always skipped by default. Against the old shader the first frame differs by at most 1/255 in rare pixels:
+  the skipped round trip's own rounding error. After 60 frames of feedback that has spread to at most a few
+  levels in a small share of pixels, the same scale as running on a different GPU.
+- **Context loss.** Recovery used to rebuild only the framebuffers; the shader programs are lost too, so the screen
+  stayed black. It now relinks the programs, rebuilds the history and the camera texture, and keeps Freeze separate
+  from the lost-context state.
+- **Resize.** Rebuilding the panel is now debounced while a window is being resized (design-mode layouts follow the
+  window's shape and would otherwise rebuild on every size step); the stage still rescales immediately.
+
+Not changed, on purpose: the render resolution stays 720 x 1280 / 1280 x 720 even when the screen is shown smaller.
+The feedback's per-frame resampling blur is in texels, so a lower resolution would change how the image smears and
+evolves, not just its sharpness. A "render quality" setting could trade that off later if phones need it.

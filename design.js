@@ -588,7 +588,8 @@
     e.preventDefault();
   });
   // A rotation changes which layout population is showing.
-  window.addEventListener('resize', function () { if (S.open) render(); });
+  var hudT = 0;
+  window.addEventListener('resize', function () { if (!S.open) return; clearTimeout(hudT); hudT = setTimeout(render, 150); });
 
   // ---------------------------------------------------------------- start
   load();

@@ -575,7 +575,9 @@ build();
 // 4. WebGL2 boilerplate + ring-buffer framebuffers
 // -------------------------------------------------------------
 var canvas = glCanvas;
-var gl = canvas.getContext('webgl2', { antialias: false });
+// Opaque, no depth / stencil: every pixel is written with alpha 1 and nothing is depth-tested, so the browser can
+// composite the canvas as opaque and skip allocating (and clearing) a depth buffer the size of the canvas.
+var gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false });
 if (!gl) {
   el('div', '', ui.screen, 'WebGL2 is not available in this browser, so the visualizer cannot run here.').className = 'gl-error';
   throw new Error('WebGL2 not available');
@@ -643,15 +645,40 @@ function clearFBO(target) {
   gl.clear(gl.COLOR_BUFFER_BIT);
 }
 
-function createRingBuffers() {
+// The ring starts with the 2 slots plain ping-pong needs and grows (doubling, up to RING_SIZE) only when Delay asks
+// for more history: 32 full-resolution slots are 112 MB of GPU memory, which phones feel, while Delay is usually 0.
+function createRingBuffers(n) {
   var list = [];
-  for (var i = 0; i < RING_SIZE; i++) list.push(createFBO(CW, CH));
+  for (var i = 0; i < (n || 2); i++) list.push(createFBO(CW, CH));
   return list;
+}
+
+function copyFBO(src, dst) {
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, src.fbo);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, dst.fbo);
+  gl.blitFramebuffer(0, 0, CW, CH, 0, 0, CW, CH, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+// Make room for reading `delay` frames back. The existing history keeps its order (frame k ago stays frame k ago);
+// slots for frames older than any recorded start as copies of the oldest one, so raising Delay shows a brief hold
+// of that frame rather than black, and turns into real history within `delay` frames.
+function ensureHistory(delay) {
+  var C = buffers.length, cap = C;
+  if (delay + 2 <= C) return;
+  while (cap < delay + 2) cap *= 2;
+  cap = Math.min(cap, RING_SIZE);
+  var ordered = [];
+  for (var k = C - 1; k >= 0; k--) ordered.push(buffers[wrapIndex(ringWriteIndex - 1 - k, C)]);   // oldest first
+  var fresh = [];
+  for (var i = C; i < cap; i++) { var fb = createFBO(CW, CH); copyFBO(ordered[0], fb); fresh.push(fb); }
+  buffers = fresh.concat(ordered);   // newest last; the next write goes to slot 0, the oldest copy
+  ringWriteIndex = 0;
 }
 
 function wrapIndex(i, n) { return ((i % n) + n) % n; }
 
-var buffers = createRingBuffers();
+var buffers = createRingBuffers(2);
 var ringWriteIndex = 0;
 buffers.forEach(clearFBO);
 
@@ -854,7 +881,7 @@ vec4 genCamera(vec2 st) {
 vec4 generate(vec2 st) {
   vec3 acc = vec3(0.0);
   vec4 c;
-  if (u_mix.x > 0.001) { c = genCamera(st); acc += u_mix.x * c.a * c.rgb; }
+  if (u_mix.x * u_cameraOn > 0.001) { c = genCamera(st); acc += u_mix.x * c.a * c.rgb; }   // an off camera adds nothing
   if (u_mix.y > 0.001) { c = genOsc(st);    acc += u_mix.y * c.a * c.rgb; }
   if (u_mix.z > 0.001) { c = genNoise(st);  acc += u_mix.z * c.a * c.rgb; }
   if (u_mix.w > 0.001) { c = genShape(st);  acc += u_mix.w * c.a * c.rgb; }
@@ -865,7 +892,8 @@ void main() {
   vec2 uv = v_uv;
 
   vec4 gen = generate(uv);
-  gen.rgb = hueRotate(gen.rgb, u_hue);
+  // A zero hue shift is just the clamp (skips the HSV round trip; Hue defaults to 0).
+  gen.rgb = u_hue != 0.0 ? hueRotate(gen.rgb, u_hue) : clamp(gen.rgb, 0.0, 1.0);
 
   // Feedback read: rotate/zoom/translate a little further from last
   // frame's image each frame - this is the actual "video feedback" step.
@@ -876,7 +904,7 @@ void main() {
   if (u_modulateAmount > 0.0001) fbUV = modulateUV(fbUV, gen, u_modulateAmount);
 
   vec4 prev = texture(u_prevFrame, fract(fbUV));
-  prev.rgb = hueRotate(prev.rgb, u_hueDrift);
+  prev.rgb = u_hueDrift != 0.0 ? hueRotate(prev.rgb, u_hueDrift) : clamp(prev.rgb, 0.0, 1.0);
 
   // Chromakey: pixels of the fresh layer mix close to the key color are
   // replaced with the feedback-read color instead, so a keyed color
@@ -910,10 +938,7 @@ void main() {
   fragColor = texture(u_frame, v_uv);
 }`;
 
-var feedbackProgram = linkProgram(VERTEX_SRC, FEEDBACK_FRAGMENT_SRC);
-var displayProgram = linkProgram(VERTEX_SRC, DISPLAY_FRAGMENT_SRC);
-
-var feedbackUniforms = uniformLocations(feedbackProgram, [
+var FEEDBACK_UNIFORMS = [
   'u_prevFrame', 'u_resolution', 'u_time',
   'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
   'u_mix', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
@@ -921,8 +946,15 @@ var feedbackUniforms = uniformLocations(feedbackProgram, [
   'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_invertAmount',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
   'u_blendMode', 'u_modulateAmount'
-]);
-var displayUniforms = uniformLocations(displayProgram, ['u_frame']);
+];
+var feedbackProgram, displayProgram, feedbackUniforms, displayUniforms;
+function linkPrograms() {
+  feedbackProgram = linkProgram(VERTEX_SRC, FEEDBACK_FRAGMENT_SRC);
+  displayProgram = linkProgram(VERTEX_SRC, DISPLAY_FRAGMENT_SRC);
+  feedbackUniforms = uniformLocations(feedbackProgram, FEEDBACK_UNIFORMS);
+  displayUniforms = uniformLocations(displayProgram, ['u_frame']);
+}
+linkPrograms();
 
 // -------------------------------------------------------------
 // 6. Camera source. A plain (non-FBO) texture uploaded from a hidden
@@ -945,12 +977,33 @@ function createCameraTexture() {
   return tex;
 }
 var cameraTexture = createCameraTexture();
+var camTexW = 0, camTexH = 0;          // size the camera texture is allocated at (0 = still the 1x1 placeholder)
+var camFrameNew = false, camLastTime = -1;
+var HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 
+// Note each new decoded camera frame (the camera runs at 24-30 fps, the render loop at 60).
+function watchCameraFrames(stream) {
+  camFrameNew = true;
+  if (!HAS_RVFC) return;
+  var tick = function () { if (cam.stream !== stream) return; camFrameNew = true; cameraVideo.requestVideoFrameCallback(tick); };
+  cameraVideo.requestVideoFrameCallback(tick);
+}
+
+// Upload the camera frame only when there is a new one and the Camera layer is actually in the mix; a 1280 x 720
+// upload every render frame was the costliest per-frame step with the camera on. Same-size frames update the
+// texture in place (texSubImage2D) instead of reallocating it.
 function updateCameraTexture() {
   if (!cam.stream || cameraVideo.readyState < 2) return; // HAVE_CURRENT_DATA
-  if (cameraVideo.videoWidth && cameraVideo.videoHeight) cam.aspect = cameraVideo.videoWidth / cameraVideo.videoHeight;
+  if (mixWeights()[0] <= 0.001) return;
+  var fresh = HAS_RVFC ? camFrameNew : cameraVideo.currentTime !== camLastTime;
+  if (!fresh && camTexW) return;
+  camFrameNew = false; camLastTime = cameraVideo.currentTime;
+  var w = cameraVideo.videoWidth, h = cameraVideo.videoHeight;
+  if (!w || !h) return;
+  cam.aspect = w / h;
   gl.bindTexture(gl.TEXTURE_2D, cameraTexture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo);
+  if (w === camTexW && h === camTexH) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo);
+  else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo); camTexW = w; camTexH = h; }
 }
 
 function stopCamera() {
@@ -973,7 +1026,7 @@ function startCamera(facing) {
     .then(function (stream) {
       cam.stream = stream;
       cameraVideo.srcObject = stream;
-      return cameraVideo.play();
+      return cameraVideo.play().then(function () { watchCameraFrames(stream); });
     })
     .catch(function (err) {
       stopCamera();
@@ -1026,10 +1079,12 @@ var lastWritten = buffers[0];
 
 function renderFeedbackPass(t) {
   // delay=0 reads the most recently completed frame (plain ping-pong);
-  // higher delay reads further back. Capped at RING_SIZE-2 so it can
-  // never land on the slot being written this draw call.
-  var writeIndex = ringWriteIndex;
-  var readIndex = wrapIndex(writeIndex - 1 - Math.round(params.delay), RING_SIZE);
+  // higher delay reads further back. The ring always holds at least
+  // delay+2 slots, so the read can never land on the slot being written.
+  var delay = Math.round(params.delay);
+  ensureHistory(delay);
+  var n = buffers.length, writeIndex = ringWriteIndex;
+  var readIndex = wrapIndex(writeIndex - 1 - delay, n);
   var write = buffers[writeIndex], read = buffers[readIndex];
   gl.bindFramebuffer(gl.FRAMEBUFFER, write.fbo);
   gl.viewport(0, 0, CW, CH);
@@ -1041,7 +1096,7 @@ function renderFeedbackPass(t) {
   uploadFeedbackUniforms(t);
   drawFullscreenTriangle();
   lastWritten = write;
-  ringWriteIndex = wrapIndex(ringWriteIndex + 1, RING_SIZE);
+  ringWriteIndex = wrapIndex(ringWriteIndex + 1, n);
 }
 
 function renderDisplayPass() {
@@ -1059,27 +1114,37 @@ var lastNow = performance.now();
 var timePaused = false;
 var frozen = false;
 
+// Render at most 60 times a second. Zoom, rotate, drift and hue drift are applied per rendered frame, so on a
+// 120 / 144 Hz display an uncapped loop ran the visuals 2-2.4x faster than designed and did that much more GPU work.
+// Renders are scheduled on a fixed 60 Hz grid (1 ms early is accepted, for timestamp jitter), which gives exactly
+// every frame at 60 / 59.94 Hz and an even 60 at 90-240 Hz; after a stall of 3+ frames the grid restarts.
+var FRAME_MS = 1000 / 60;
+var nextRender = 0;
+var contextLost = false;
+
 function frame(now) {
   requestAnimationFrame(frame);
   var dt = Math.min((now - lastNow) / 1000, 0.1);
   lastNow = now;
   if (!timePaused) simTime += dt;
-  if (frozen) return;
+  if (now < nextRender - 1) return;
+  nextRender = now - nextRender > 3 * FRAME_MS ? now + FRAME_MS : nextRender + FRAME_MS;
+  if (frozen || contextLost) return;
   updateCameraTexture();
   renderFeedbackPass(simTime);
   renderDisplayPass();
 }
 
-// Recover from a lost WebGL context by recreating the ring buffers -
-// otherwise the canvas just freezes on black with no obvious cause.
-canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); frozen = true; }, false);
+// A lost WebGL context (GPU reset, driver update, memory pressure) drops every program, texture and framebuffer;
+// rebuild them all when it comes back, otherwise the canvas stays black.
+canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); contextLost = true; }, false);
 canvas.addEventListener('webglcontextrestored', function () {
-  buffers = createRingBuffers();
-  ringWriteIndex = 0;
-  buffers.forEach(clearFBO);
-  lastWritten = buffers[0];
+  linkPrograms();
+  buffers = createRingBuffers(2);
+  clearScreen();
   cameraTexture = createCameraTexture();
-  frozen = false;
+  camTexW = camTexH = 0; camFrameNew = true;
+  contextLost = false;
 }, false);
 
 // -------------------------------------------------------------
@@ -1102,7 +1167,7 @@ function clearScreen() {
 // After a layout change the render size can flip (720 x 1280 <-> 1280 x 720): replace the ring buffers at the new size.
 function resizeTargets() {
   buffers.forEach(function (b) { gl.deleteFramebuffer(b.fbo); gl.deleteTexture(b.tex); });
-  buffers = createRingBuffers();
+  buffers = createRingBuffers(2);
   clearScreen();
 }
 
@@ -1143,12 +1208,19 @@ function viewSize() {
 // not while the screen is fullscreen: rebuilding would drop the fullscreen element, so that waits for fullscreenchange.
 function fit() {
   if (layoutKey() !== builtKey && !currentFullscreenElement()) build();
+  scaleStage();
+}
+function scaleStage() {
   var v = viewSize(), k = Math.min(v[0] / SW, v[1] / SH);
   stage.dataset.scale = String(k);
   stage.style.transform = 'translate(' + ((v[0] - SW * k) / 2) + 'px,' + ((v[1] - SH * k) / 2) + 'px) scale(' + k + ')';
 }
-window.addEventListener('resize', fit);
-if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+// While a window is being resized, rescale at once but rebuild (a design-mode layout follows the window's shape, so
+// every size step would otherwise rebuild the whole panel) only once the resizing pauses.
+var fitTimer = 0;
+function onResize() { scaleStage(); clearTimeout(fitTimer); fitTimer = setTimeout(fit, 120); }
+window.addEventListener('resize', onResize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', function () { fit(); setTimeout(fit, 400); });
 window.addEventListener('pageshow', fit);
 document.addEventListener('gesturestart', function (e) { e.preventDefault(); });   // iOS pinch-zoom
@@ -1167,6 +1239,50 @@ if (location.hash.indexOf('#shot') === 0) {
     knobs: document.querySelectorAll('[role="slider"]').length, buttons: document.querySelectorAll('button').length,
     glError: gl.getError(), frames: n, errors: REPORT
   });
+} else if (location.hash.indexOf('#bench') === 0) {
+  // Benchmark hook (index.html#bench): ms per frame for the feedback + display passes under several settings, GPU memory
+  // for the feedback history, uniform-upload CPU cost, and an output fingerprint (hash of every pixel after 60
+  // deterministic frames) so optimizations can be checked for identical output.
+  (function () {
+    var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    var out = { gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?', res: CW + 'x' + CH, slotsAtStart: buffers.length, ms: {}, hash: {} };
+    var px1 = new Uint8Array(4), all = new Uint8Array(CW * CH * 4);
+    var sync = function () { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px1); };
+    var configs = { default: {}, hueOff: { hueDrift: 0 }, noise: { mixX: 0, mixY: 0 }, allLayers: { mixX: 0.5, mixY: 0.5 },
+                    keyModulate: { chromakeyEnabled: true, modulateAmount: 0.5 }, delay5: { delay: 5 } };
+    var run = function (setup, n) {
+      Object.assign(params, DEFAULTS, setup); syncUI(); clearScreen(); simTime = 0;
+      for (var i = 0; i < n; i++) { simTime += 1 / 60; renderFeedbackPass(simTime); }
+    };
+    Object.keys(configs).forEach(function (k) {
+      run(configs[k], 60);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, lastWritten.fbo);
+      gl.readPixels(0, 0, CW, CH, gl.RGBA, gl.UNSIGNED_BYTE, all);
+      var h = 2166136261; for (var i = 0; i < all.length; i += 7) h = Math.imul(h ^ all[i], 16777619) >>> 0;
+      out.hash[k] = h.toString(16);
+      sync();
+      var t0 = performance.now(), n = 0;
+      do { for (var j = 0; j < 10; j++) { simTime += 1 / 60; renderFeedbackPass(simTime); renderDisplayPass(); } n += 10; sync(); } while (performance.now() - t0 < 300);
+      sync();
+      out.ms[k] = +((performance.now() - t0) / n).toFixed(3);
+    });
+    sync();
+    var t1 = performance.now();
+    for (var d = 0; d < 20; d++) renderDisplayPass();
+    sync(); out.displayMs = +((performance.now() - t1) / 20).toFixed(2);
+    gl.useProgram(feedbackProgram);
+    var t2 = performance.now();
+    for (var u = 0; u < 5000; u++) uploadFeedbackUniforms(u);
+    out.uniformUs = +((performance.now() - t2) / 5000 * 1000).toFixed(2);
+    // Main-thread costs: Mix pad redraw and a full panel rebuild.
+    var avg = function (n, f) { var t = performance.now(); for (var i = 0; i < n; i++) f(i); return +((performance.now() - t) / n).toFixed(3); };
+    out.padMs = avg(200, function (i) { params.mixX = (i % 50) / 50; drawPad(); });
+    out.buildMs = avg(20, function () { build(); });
+    out.historyMB = +(buffers.length * CW * CH * 4 / 1048576).toFixed(1);
+    out.slots = buffers.length;
+    out.glError = gl.getError(); out.errors = REPORT;
+    document.getElementById('__report').textContent = JSON.stringify(out);
+  })();
 } else {
   requestAnimationFrame(function (now) { lastNow = now; requestAnimationFrame(frame); });
 }
