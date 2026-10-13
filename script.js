@@ -120,24 +120,6 @@ function famFill(fam, x, y, w, h, d) {
   f.className = 'fam fam-' + fam;
   return f;
 }
-// Outlined section of any right-angled shape (points clockwise), corners rounded like sec().
-function outline(pts, title, tabX, tabY, fam) {
-  var xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
-  var x0 = Math.min.apply(null, xs), y0 = Math.min.apply(null, ys), w = Math.max.apply(null, xs) - x0, h = Math.max.apply(null, ys) - y0;
-  if (fam) famFill(fam, x0, y0, w, h, roundedPath(pts, x0, y0));
-  var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('width', String(w + 2)); svg.setAttribute('height', String(h + 2)); svg.setAttribute('aria-hidden', 'true');
-  svg.style.cssText = at(x0, y0) + ';overflow:visible;pointer-events:none';
-  var path = document.createElementNS(NS, 'path');
-  path.setAttribute('d', roundedPath(pts, x0, y0));
-  path.setAttribute('fill', 'none'); path.setAttribute('stroke', P.inkMute); path.setAttribute('stroke-width', '1');
-  path.setAttribute('transform', 'translate(0.5 0.5)');
-  if (fam) path.setAttribute('class', 'frame frame-' + fam);
-  svg.appendChild(path);
-  panel.appendChild(svg);
-  nameplate(panel, tabX, tabY - 9, title, fam);
-}
-
 // Knob scale: n ticks spread over the 270-degree sweep (11 by default; stepped knobs get one tick per position).
 function scaleCss(n) {
   var per = 270 / (n - 1);
@@ -222,58 +204,6 @@ function glass(x, y, w, h, aria) {
   c.width = Math.round(w * 2); c.height = Math.round(h * 2);
   return { g: g, c: c, x: c.getContext('2d'), w: c.width, h: c.height };
 }
-
-// Fader: a glass slot holding a colour ramp, with a rubber cap. Drag or tap anywhere along it.
-// Horizontal: (x, y) is the left end of the centre line and w its length. o.vertical: (x, y) is the top end and w the
-// length, with low values at the bottom.
-function fader(x, y, w, label, key, o) {
-  o = o || {};
-  var d = PD[key], capW = 16, capH = 30, vert = !!o.vertical;
-  var hit = el('div', (vert ? at(x - capH / 2, y, capH, w) : at(x, y - capH / 2, w, capH)) + ';cursor:' + (vert ? 'ns' : 'ew') + '-resize;touch-action:none');
-  hit.setAttribute('role', 'slider'); hit.tabIndex = 0; hit.setAttribute('aria-label', label);
-  var slot = el('div', (vert ? at(capH / 2 - 7, 0, 14, w) : at(0, capH / 2 - 7, w, 14)) + ';box-sizing:border-box;padding:3px;border-radius:7px;background:#050406;box-shadow:inset 0 2px 5px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)', hit);
-  var ramp = el('div', 'width:100%;height:100%;border-radius:4px', slot);
-  var cap = el('div', (vert ? at(0, 0, capH, capW) + ';margin-top:-' : at(0, 0, capW, capH) + ';margin-left:-') + (capW / 2) + 'px;box-sizing:border-box;border-radius:4px;pointer-events:none;' +
-    'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09)', hit);
-  el('div', (vert ? 'position:absolute;top:50%;left:5px;right:5px;height:2px;margin-top:-1px' : 'position:absolute;left:50%;top:5px;bottom:5px;width:2px;margin-left:-1px') + ';border-radius:1px;background:' + P.ink, cap);
-  if (vert) cl(x, y + w + 10, 110, label, PRINT(10, P.inkDim));
-  else cl(x + w / 2, y + capH / 2 + 8, w, label, PRINT(10, P.inkDim));
-  var k = {
-    v: 0, ramp: ramp, dir: vert ? 'to top' : 'to right', def: toV(d, d.def),
-    text: function () { return label + '  ' + d.f(params[key]); },
-    show: function (v) {
-      k.v = v;
-      if (vert) cap.style.top = (capW / 2 + (1 - v) * (w - capW)) + 'px'; else cap.style.left = (capW / 2 + v * (w - capW)) + 'px';
-      hit.setAttribute('aria-valuetext', d.f(params[key]));
-    },
-    set: function (v) { var xv = fromV(d, v); params[key] = xv; k.show(toV(d, xv)); if (o.after) o.after(xv); },
-    sync: function () { k.show(toV(d, params[key])); if (o.after) o.after(params[key]); }
-  };
-  k.sync();
-  var fromEv = function (e) {
-    var r = hit.getBoundingClientRect();
-    if (vert) { var ch = capW * r.height / w; return clamp(1 - (e.clientY - r.top - ch / 2) / (r.height - ch)); }
-    var cw = capW * r.width / w; return clamp((e.clientX - r.left - cw / 2) / (r.width - cw));
-  };
-  hit.addEventListener('pointerdown', function (e) {
-    if (e.button !== 0) return;
-    e.preventDefault(); hit.setPointerCapture(e.pointerId); dragging = true;
-    k.set(fromEv(e)); showTip(cap, k.text());
-    var move = function (ev) { k.set(fromEv(ev)); showTip(cap, k.text()); };
-    var up = function () { dragging = false; hit.removeEventListener('pointermove', move); hit.removeEventListener('pointerup', up); hit.removeEventListener('pointercancel', up); hideTip(); };
-    hit.addEventListener('pointermove', move); hit.addEventListener('pointerup', up); hit.addEventListener('pointercancel', up);
-  });
-  hit.addEventListener('pointerenter', function () { if (!dragging) showTip(cap, k.text()); });
-  hit.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
-  hit.addEventListener('dblclick', function () { k.set(k.def); showTip(cap, k.text()); });
-  hit.addEventListener('wheel', function (e) { e.preventDefault(); k.set(clamp(k.v - (e.deltaY > 0 ? 0.01 : -0.01))); showTip(cap, k.text()); }, { passive: false });
-  hit.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { k.set(clamp(k.v + 0.01)); e.preventDefault(); }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { k.set(clamp(k.v - 0.01)); e.preventDefault(); }
-  });
-  syncers.push(k.sync);
-  return k;
-}
 function syncUI() { syncers.forEach(function (s) { s(); }); }
 
 // -------------------------------------------------------------
@@ -311,11 +241,7 @@ var PD = {
   // Layers
   speed: { min: -2, max: 2, def: 0.3, step: 0.01, snap: 0, f: function (v) { return sgn(v, 2); } },
   noiseScale: { min: 0.5, max: 20, def: 4, step: 0.1, f: function (v) { return v.toFixed(1); } },
-  shapeSides: { min: 3, max: 12, def: 5, step: 1, f: function (v) { return v + ' sides'; } },
-  // Background layer (HSL)
-  bgHue: { min: 0, max: 360, def: 270, step: 1, f: deg },
-  bgSat: { min: 0, max: 1, def: 0.5, step: 0.01, f: pct },
-  bgLight: { min: 0, max: 1, def: 0.12, step: 0.01, f: pct }
+  shapeSides: { min: 3, max: 12, def: 5, step: 1, f: function (v) { return v + ' sides'; } }
 };
 // Fixed generator settings that no longer have knobs.
 var FIXED = { frequency: 8, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
@@ -340,20 +266,20 @@ function hslToRgb(h, s, l) {
 
 // -------------------------------------------------------------
 // 3. Panel layout, in two orientations chosen by the window's shape (or #portrait / #landscape in the URL).
-// Portrait, 900 x 1440 (the layout sketch): the 9:16 screen top left with the header keys under it, the Layers knobs
-// and XY Mix pad below that, the effect knobs in two columns down the right, the Background HSL faders along the bottom.
-// Landscape, 1472 x 908: the same panel rotated 90 degrees clockwise and flipped horizontally (a transpose). The screen
+// Portrait, 900 x 1336: the 9:16 screen top left with the header keys under it, the Layers knobs
+// and XY Mix pad below that, and the effect knobs in two columns down the right.
+// Landscape, 1336 x 908: the same panel rotated 90 degrees clockwise and flipped horizontally (a transpose). The screen
 // stays top left but turns 16:9, the header keys stand in a column to its right, Layers and Mix sit right of that, the
-// effect knobs run in two rows along the bottom, and the Background faders stand vertically down the right edge.
+// effect knobs run in two rows along the bottom.
 // Everything is written in portrait coordinates; pt() and box() transpose them for landscape (y gains 8 so the top
 // nameplates clear the edge).
 // -------------------------------------------------------------
 var M = 8;
 var LW = 560, RX = M + LW + 16, RW = 900 - M - RX;               // left column (screen) and right column (knobs)
 var BEZ = [M, 16, LW, 980];                                      // bezel; the canvas inside is 540 x 960 (9:16)
-var KEY_Y = 1008, LOW_Y = 1056, LOW_B = 1328, BG_Y = 1344;
+var KEY_Y = 1008, LOW_Y = 1056, LOW_B = 1328;
 var ROW_Y0 = 8, ROW_P = (LOW_B + 8 - ROW_Y0) / 10;               // ten knob rows on the right
-var LAND = false, SW = 900, SH = 1440, CW = 720, CH = 1280;      // orientation, stage size, render resolution
+var LAND = false, SW = 900, SH = LOW_B + 8, CW = 720, CH = 1280;      // orientation, stage size, render resolution
 function pt(x, y) { return LAND ? [y, x + 8] : [x, y]; }
 function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
 function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
@@ -367,7 +293,7 @@ glCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;displ
 var ui = {};
 function build(land) {
   LAND = land;
-  SW = LAND ? 1472 : 900; SH = LAND ? 908 : 1440; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
+  SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
   hideTip(); panel.innerHTML = ''; syncers = []; ui = {};
   stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
 
@@ -397,7 +323,6 @@ function build(land) {
   buildLayers();
   buildMix();
   buildRight();
-  buildBackground();
 }
 
 // Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape).
@@ -514,19 +439,17 @@ function drawPad() {
   p.g.setAttribute('aria-valuetext', names.map(function (n, i) { return n + ' ' + Math.round(wt[i] * 100) + '%'; }).join(', '));
 }
 
-// Right column (portrait) / bottom band (landscape): Feedback, Transform, Color, Chromakey. Transform and Color share
-// row 5 (Hue Drift / Hue), so their outlines step around each other there.
+// Right column (portrait) / bottom band (landscape), ten knob rows: Feedback (rows 1-2), Chromakey (rows 3-5), then
+// Transform and Color side by side as single columns of five (rows 6-10; in landscape, two stacked rows of five).
 function buildRight() {
-  var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2, R2 = RX + RW;
+  var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
-  var ks = 42, P2 = function (a) { return pt(a[0], a[1]); };
+  var ks = 42;
   secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), 'Feedback', 'feedback');
-  // Nameplates sit on each shape's top edge: in landscape that is the long edge the panel's right side became.
-  var tT = LAND ? [B(2) + 20, RX + 8] : [RX + 12, B(2) + 8], tC = LAND ? [B(5) + 20, RX + 8] : [mid + 20, B(4) + 8];
-  outline([[RX, B(2) + 8], [R2, B(2) + 8], [R2, B(4) - 8], [mid - 8, B(4) - 8], [mid - 8, B(5) - 8], [RX, B(5) - 8]].map(P2), 'Transform', tT[0], tT[1], 'transform');
-  outline([[mid + 8, B(4) + 8], [R2, B(4) + 8], [R2, B(7) - 8], [RX, B(7) - 8], [RX, B(5) + 8], [mid + 8, B(5) + 8]].map(P2), 'Color', tC[0], tC[1], 'color');
-  var ck = box(RX, B(7) + 8, RW, B(10) - B(7) - 16);
+  var ck = box(RX, B(2) + 8, RW, B(5) - B(2) - 16);
   secBox(ck, 'Chromakey', 'chroma');
+  secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Transform', 'transform');
+  secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Color', 'color');
 
   ui.blend = knobAt(c1, cy(0), ks, 'Blend Mode', 'blendMode', { ticks: 4, after: syncBlendLegend });
   var bp = pt(c1, cy(0));
@@ -535,28 +458,21 @@ function buildRight() {
   knobAt(c1, cy(1), ks, 'Persistence', 'feedback');
   knobAt(c2, cy(1), ks, 'Delay', 'delay');
 
-  knobAt(c1, cy(2), ks, 'Zoom', 'zoom');
-  knobAt(c2, cy(2), ks, 'Rotate', 'rotate');
-  knobAt(c1, cy(3), ks, 'Shift X', 'translateX');
-  knobAt(c2, cy(3), ks, 'Shift Y', 'translateY');
-  knobAt(c1, cy(4), ks, 'Hue Drift', 'hueDrift');
-
-  knobAt(c2, cy(4), ks, 'Hue', 'hue');
-  knobAt(c1, cy(5), ks, 'Saturation', 'saturate');
-  knobAt(c2, cy(5), ks, 'Brightness', 'brightness');
-  knobAt(c1, cy(6), ks, 'Contrast', 'contrast');
-  knobAt(c2, cy(6), ks, 'Invert', 'invertAmount');
-
-  var ep = pt(c1, cy(7));
+  var ep = pt(c1, cy(2));
   ui.keyOn = key(ep[0] - 36, ep[1] - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
   cl(ep[0], ep[1] + ks / 2 + 15, 120, 'Enable', LABEL);
   syncers.push(syncKeyOn);
   syncKeyOn();
-  knobAt(c2, cy(7), ks, 'Key Hue', 'keyHue', { after: syncKeySwatch });
-  knobAt(c1, cy(8), ks, 'Key Sat', 'keySat', { after: syncKeySwatch });
-  knobAt(c2, cy(8), ks, 'Key Light', 'keyLight', { after: syncKeySwatch });
-  knobAt(c1, cy(9), ks, 'Threshold', 'chromakeyThreshold');
-  knobAt(c2, cy(9), ks, 'Softness', 'chromakeySoftness');
+  knobAt(c2, cy(2), ks, 'Key Hue', 'keyHue', { after: syncKeySwatch });
+  knobAt(c1, cy(3), ks, 'Key Sat', 'keySat', { after: syncKeySwatch });
+  knobAt(c2, cy(3), ks, 'Key Light', 'keyLight', { after: syncKeySwatch });
+  knobAt(c1, cy(4), ks, 'Threshold', 'chromakeyThreshold');
+  knobAt(c2, cy(4), ks, 'Softness', 'chromakeySoftness');
+
+  [['Zoom', 'zoom'], ['Rotate', 'rotate'], ['Shift X', 'translateX'], ['Shift Y', 'translateY'], ['Hue Drift', 'hueDrift']]
+    .forEach(function (d, i) { knobAt(c1, cy(5 + i), ks, d[0], d[1]); });
+  [['Hue', 'hue'], ['Saturation', 'saturate'], ['Brightness', 'brightness'], ['Contrast', 'contrast'], ['Invert', 'invertAmount']]
+    .forEach(function (d, i) { knobAt(c2, cy(5 + i), ks, d[0], d[1]); });
   // A chip of the key colour beside the Chromakey nameplate.
   ui.keySwatch = el('span', at(ck[0] + 116, ck[1] - 6, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
   syncKeySwatch();
@@ -583,29 +499,6 @@ function syncBlendLegend() {
     var on = i === params.blendMode;
     s.style.color = on ? P.accent : P.inkMute; s.style.textShadow = on ? '0 0 6px ' + P.accentGlow : 'none';
   });
-}
-
-// Background: the layer under the mix, as Hue / Saturation / Lightness faders (a row along the bottom in portrait,
-// standing vertically down the right edge in landscape, low values at the bottom).
-function buildBackground() {
-  var F = [['Hue', 'bgHue'], ['Saturation', 'bgSat'], ['Lightness', 'bgLight']];
-  if (LAND) {
-    var s = [BG_Y, 16, SW - M - BG_Y, SH - M - 16], top = s[1] + 30, gap = 34, len = (s[3] - 30 - 30 - 2 * gap) / 3 - 22;
-    secBox(s, 'Background', 'bg');
-    ui.bg = F.map(function (d, i) { return fader(s[0] + s[2] / 2, top + i * (len + 22 + gap), len, d[0], d[1], { vertical: true, after: syncBgRamps }); });
-  } else {
-    secBox([M, BG_Y, 900 - 2 * M, SH - M - BG_Y], 'Background', 'bg');
-    var iw = 900 - 2 * M - 48, g = 40, fw = (iw - 2 * g) / 3, fy = BG_Y + 34;
-    ui.bg = F.map(function (d, i) { return fader(M + 24 + i * (fw + g), fy, fw, d[0], d[1], { after: syncBgRamps }); });
-  }
-  syncBgRamps();
-}
-function syncBgRamps() {
-  if (!ui.bg || ui.bg.length < 3) return;
-  var h = params.bgHue, s = Math.round(params.bgSat * 100), dir = ui.bg[0].dir;
-  ui.bg[0].ramp.style.background = 'linear-gradient(' + dir + ',' + [0, 60, 120, 180, 240, 300, 360].map(function (a) { return 'hsl(' + a + ',100%,50%)'; }).join(',') + ')';
-  ui.bg[1].ramp.style.background = 'linear-gradient(' + dir + ',hsl(' + h + ',0%,50%),hsl(' + h + ',100%,50%))';
-  ui.bg[2].ramp.style.background = 'linear-gradient(' + dir + ',#000,hsl(' + h + ',' + s + '%,50%),#fff)';
 }
 
 function wantLand() {
@@ -759,9 +652,8 @@ uniform float u_rotate;
 uniform vec2  u_translate;
 uniform float u_hueDrift;
 
-// layers: weights from the XY mixer (camera, osc, noise, shape), plus the background
+// layers: weights from the XY mixer (camera, osc, noise, shape)
 uniform vec4  u_mix;
-uniform vec3  u_bgColor;
 uniform float u_frequency;
 uniform float u_speed;
 uniform float u_sync;
@@ -871,7 +763,7 @@ vec4 genNoise(vec2 st) {
   return vec4(nr, ng, nb, 1.0);
 }
 
-// White polygon; alpha is the shape itself, so the background shows around it.
+// White polygon; alpha is the shape itself, so the mix shows black around it.
 vec4 genShape(vec2 st) {
   vec2 c = (st - 0.5) * vec2(1.0, 1.0 / aspect());
   float a = atan(c.x, c.y) + 3.14159265359;
@@ -894,17 +786,16 @@ vec4 genCamera(vec2 st) {
   return vec4(texture(u_camera, uv).rgb, u_cameraOn);
 }
 
-// The four layers crossfaded by the mixer weights; whatever coverage
-// they leave (shape's surroundings, an off camera) is the background.
+// The four layers crossfaded by the mixer weights; whatever they leave
+// uncovered (around the shape, an off camera) is black.
 vec4 generate(vec2 st) {
   vec3 acc = vec3(0.0);
-  float cov = 0.0;
   vec4 c;
-  if (u_mix.x > 0.001) { c = genCamera(st); acc += u_mix.x * c.a * c.rgb; cov += u_mix.x * c.a; }
-  if (u_mix.y > 0.001) { c = genOsc(st);    acc += u_mix.y * c.a * c.rgb; cov += u_mix.y * c.a; }
-  if (u_mix.z > 0.001) { c = genNoise(st);  acc += u_mix.z * c.a * c.rgb; cov += u_mix.z * c.a; }
-  if (u_mix.w > 0.001) { c = genShape(st);  acc += u_mix.w * c.a * c.rgb; cov += u_mix.w * c.a; }
-  return vec4(acc + (1.0 - clamp(cov, 0.0, 1.0)) * u_bgColor, 1.0);
+  if (u_mix.x > 0.001) { c = genCamera(st); acc += u_mix.x * c.a * c.rgb; }
+  if (u_mix.y > 0.001) { c = genOsc(st);    acc += u_mix.y * c.a * c.rgb; }
+  if (u_mix.z > 0.001) { c = genNoise(st);  acc += u_mix.z * c.a * c.rgb; }
+  if (u_mix.w > 0.001) { c = genShape(st);  acc += u_mix.w * c.a * c.rgb; }
+  return vec4(acc, 1.0);
 }
 
 void main() {
@@ -962,7 +853,7 @@ var displayProgram = linkProgram(VERTEX_SRC, DISPLAY_FRAGMENT_SRC);
 var feedbackUniforms = uniformLocations(feedbackProgram, [
   'u_prevFrame', 'u_resolution', 'u_time',
   'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
-  'u_mix', 'u_bgColor', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
+  'u_mix', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
   'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_invertAmount',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
@@ -1034,8 +925,7 @@ window.addEventListener('beforeunload', function () { if (cam.stream) cam.stream
 // 7. Uniform upload + render loop
 // -------------------------------------------------------------
 function uploadFeedbackUniforms(t) {
-  var u = feedbackUniforms, w = mixWeights(), bg = hslToRgb(params.bgHue, params.bgSat, params.bgLight),
-      key = hslToRgb(params.keyHue, params.keySat, params.keyLight);
+  var u = feedbackUniforms, w = mixWeights(), key = hslToRgb(params.keyHue, params.keySat, params.keyLight);
   gl.uniform1i(u.u_prevFrame, 0);
   gl.uniform2f(u.u_resolution, CW, CH);
   gl.uniform1f(u.u_time, t);
@@ -1045,7 +935,6 @@ function uploadFeedbackUniforms(t) {
   gl.uniform2f(u.u_translate, params.translateX, params.translateY);
   gl.uniform1f(u.u_hueDrift, params.hueDrift);
   gl.uniform4f(u.u_mix, w[0], w[1], w[2], w[3]);
-  gl.uniform3f(u.u_bgColor, bg[0], bg[1], bg[2]);
   gl.uniform1f(u.u_frequency, FIXED.frequency);
   gl.uniform1f(u.u_speed, params.speed);
   gl.uniform1f(u.u_sync, FIXED.sync);

@@ -34,7 +34,7 @@ button:focus-visible { box-shadow: 0 0 0 2px #cfabf6 !important; }
    to its outline and a .tab-<family> nameplate: brushed-metal grain and
    a top-light sheen over a saturated anodised tint, nameplates in the
    family colour. Families: feedback, transform, color, chroma, layers,
-   mix, bg. --fc is the family's key colour, --anod its panel tint.
+   mix. --fc is the family's key colour, --anod its panel tint.
    --------------------------------------------------------------- */
 .fam-feedback,  .tab-feedback,  .frame-feedback  { --fc: #b98aef; --anod: #3d2f57; }
 .fam-transform, .tab-transform, .frame-transform { --fc: #6fa8ff; --anod: #233a5a; }
@@ -42,7 +42,6 @@ button:focus-visible { box-shadow: 0 0 0 2px #cfabf6 !important; }
 .fam-chroma,    .tab-chroma,    .frame-chroma    { --fc: #5fd08a; --anod: #1f4a30; }
 .fam-layers,    .tab-layers,    .frame-layers    { --fc: #57c4c4; --anod: #1d4a4e; }
 .fam-mix,       .tab-mix,       .frame-mix       { --fc: #c9c6d0; --anod: #35353f; }
-.fam-bg,        .tab-bg,        .frame-bg        { --fc: #e88aa8; --anod: #552a3b; }
 .fam { background-color: var(--anod);
   background-image:
     repeating-linear-gradient(0deg, rgba(255,255,255,0.028) 0 1px, rgba(0,0,0,0.05) 1px 2px, transparent 2px 3px, rgba(255,255,255,0.015) 3px 4px, transparent 4px 7px),

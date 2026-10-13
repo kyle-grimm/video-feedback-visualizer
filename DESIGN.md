@@ -390,7 +390,7 @@ current shader:
 ## 8. Control panel plan
 
 **Rebuilt 2026-10-11 (supersedes the tables below).** The panel is now a fixed
-900 x 1440 stage scaled to fit the window, styled after the Oscilloscope
+900 x 1336 stage (900 x 1440 before the Background strip was removed) scaled to fit the window, styled after the Oscilloscope
 Visualizer's L9 panel (graphite, outlined sections with ink nameplates, MS-20
 knobs, rubber keys with LEDs, black glass screens, Barlow Semi Condensed). Layout,
 from the user's sketch:
@@ -404,28 +404,29 @@ from the user's sketch:
   opacity with bilinear weights that always sum to 1 (Camera top-left,
   Oscillator top-right, Noise bottom-left, Shape bottom-right). The generator
   `type` selector is gone: all four layers are drawn and mixed every frame.
-- **Right column**, two knobs per row: Feedback (Blend Mode, Modulate,
-  Persistence, Delay); Transform (Zoom, Rotate, Shift X, Shift Y, Hue Drift);
-  Color (Hue, Saturation, Brightness, Contrast, Invert); Chromakey (On, Key Hue,
-  Key Sat, Key Light, Threshold, Softness). Transform and Color share a row
-  (Hue Drift | Hue), so their outlines step around each other there.
-- **Background** (bottom): Hue / Saturation / Lightness faders for the layer under
-  the mix. It shows wherever the mix leaves no coverage (around the shape,
-  or where the camera layer is weighted in while the camera is off).
+- **Right column**, two knobs per row (ten rows): Feedback (Blend Mode,
+  Modulate, Persistence, Delay); Chromakey (On, Key Hue, Key Sat, Key Light,
+  Threshold, Softness); then Transform (Zoom, Rotate, Shift X, Shift Y, Hue
+  Drift) and Color (Hue, Saturation, Brightness, Contrast, Invert) side by side,
+  each a single column of five. (Reordered 2026-10-12; before that Transform and
+  Color shared a row with stepped outlines and Chromakey came last.)
+- ~~Background~~ (removed 2026-10-12): there were Hue / Saturation / Lightness
+  faders for a layer under the mix. Now whatever the mix leaves uncovered
+  (around the shape, or the camera's share while the camera is off) is black.
 
 Dropped in the rebuild: the Gradient and Solid generators (Solid became the
-Background), the Frequency, Osc Sync and Shape Soft knobs (now fixed at 8, 0.2
+Background, since removed), the Frequency, Osc Sync and Shape Soft knobs (now fixed at 8, 0.2
 and 0.05), and the localStorage preset list. The chromakey key colour is now set
 as HSL (converted to RGB in JS). Noise drifts at a fixed rate, so Osc Speed
 moves only the oscillator.
 
 **Landscape layout (2026-10-11).** When the window is wider than tall (or the
 URL hash contains `landscape` / `portrait`), the panel is the same layout
-transposed (rotated 90° clockwise, then flipped horizontally) on a 1472 x 908
+transposed (rotated 90° clockwise, then flipped horizontally) on a 1336 x 908
 stage. The screen turns 16:9 (rendered at 1280 x 720), the header keys stand in a
 column beside it, Layers and Mix sit to its right, the effect knobs run in two
-rows along the bottom, and the Background faders stand vertically (low values at
-the bottom) down the right edge. The XY pad transposes with the Layers knobs, so
+rows along the bottom (Transform and Color as two stacked rows of five). The XY
+pad transposes with the Layers knobs, so
 Camera / Noise are along its top and Osc / Shape along its bottom in landscape. The
 mixer state itself (`mixX`, `mixY`) is orientation-independent. Layout code is
 written in portrait coordinates and `pt()` / `box()` transpose them. The WebGL
