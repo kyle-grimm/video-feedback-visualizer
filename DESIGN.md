@@ -434,7 +434,12 @@ canvas persists across rebuilds; only the ring buffers are recreated at the new
 size. A rotation while fullscreen is applied when fullscreen ends.
 
 Theme: Anodized (brushed-metal grain over a saturated tint per parameter family,
-family-coloured nameplates), chosen from nine candidates.
+family-coloured nameplates), chosen from nine candidates. It stays in style.css as the
+underlying look, but since 2026-10-12 the shipped scheme is one evolved in design mode
+(`COLOR_DEFAULT` in design.js, applied as CSS whenever no scheme is adopted): muted
+family tints (amber Feedback, olive Chromakey, green Transform, magenta Color, teal
+Layers, grey Mix) with a fine grille texture, ink nameplates, family-coloured knob
+pointers, no section outlines, near-black stage, teal accents.
 
 **Design mode (2026-10-12, `design.js`).** Experimentation tooling opened by the
 Design key on the screen's top left (hidden since 2026-10-12; add `#design` to the URL to show it): preference-driven evolution of layouts and

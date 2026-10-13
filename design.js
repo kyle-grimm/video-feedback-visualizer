@@ -41,12 +41,15 @@
   var TEXTURES = ['flat', 'brushed', 'hatch', 'grille', 'spun', 'carbon'];
   var OUTLINES = ['gray', 'family', 'none'], TABS = ['filled', 'dark', 'ink', 'outline'];
   var PTRS = ['ink', 'family', 'accent'], LABELS = ['dim', 'family', 'bright'], CAPS = ['black', 'silver', 'family'];
-  // The shipped Anodized theme, approximately.
+  // The shipped colour scheme (picked in design mode, 2026-10-12): shown whenever no scheme is adopted, and the
+  // starting point of a new colour population. Grille texture, ink nameplates, family-coloured pointers, no outlines.
+  // (Before it: Anodized, hue [261, 144, 215, 34, 185, 240], pSat 0.42, pLight 0.23, sHue 300, sSat 0.02, sLight 0.14,
+  // brushed 0.5, gray outlines, filled tabs, ink pointers, accentHue 220.)
   var COLOR_DEFAULT = {
-    hue: [261, 144, 215, 34, 185, 240],   // FAMS order: feedback, chroma, transform, color, layers, mix
-    sat: [0.72, 0.98, 1.05, 1.1, 1.1, 0.22], pSat: 0.42, pLight: 0.23, kSat: 0.72, kLight: 0.68,
-    sHue: 300, sSat: 0.02, sLight: 0.14, texture: 'brushed', texStr: 0.5, sheen: 0.5,
-    outline: 'gray', tab: 'filled', ptr: 'ink', label: 'dim', cap: 'black', glassHue: 141, accentHue: 220
+    hue: [38.483, 85.606, 149.781, 319.632, 165.593, 254.772],   // FAMS order: feedback, chroma, transform, color, layers, mix
+    sat: [0.72, 0.98, 1.05, 1.1, 1.1, 0.22], pSat: 0.3211, pLight: 0.3479, kSat: 0.72, kLight: 0.68,
+    sHue: 16.187, sSat: 0, sLight: 0.0513, texture: 'grille', texStr: 0.0463, sheen: 0.5,
+    outline: 'none', tab: 'ink', ptr: 'family', label: 'dim', cap: 'black', glassHue: 141, accentHue: 164.74
   };
   var COLOR_OPS = [
     function (g) { var i = ri(6); g.hue[i] = wrap(g.hue[i] + gauss() * 35); },
@@ -337,7 +340,7 @@
     return ts.pop[ts.sel];
   }
   // What the panel shows: the track being rated uses its selected candidate, the other track its adopted genome.
-  function shownColor() { if (S.open && S.track === 'color') return current('color').g; return S.adopted.color; }
+  function shownColor() { if (S.open && S.track === 'color') return current('color').g; return S.adopted.color || COLOR_DEFAULT; }
   function shownLayout() { if (S.open && S.track === 'layout') return current('layout').g; return S.adopted[orient()]; }
 
   // ---------------------------------------------------------------- evolution
