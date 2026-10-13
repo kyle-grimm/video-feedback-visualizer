@@ -91,6 +91,8 @@ function dragValue(target, ctl, range) {
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
 var SEC_R = 3; // section corner radius (design mode can change it)
+// Control and label scale for the makers below: 1 by default; the portrait built-in layout sets 1.5 and 2.
+var UK = 1, UL = 1;
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
   var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:' + SEC_R + 'px;pointer-events:none');
@@ -144,7 +146,7 @@ function knob(x, y, size, label, key, o) {
   el('div', 'position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 45% 35%,#3b393e 0%,#201f22 60%,#161517 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.10)', skirt).className = 'knob-cap';
   var ptr = el('div', 'position:absolute;inset:0', skirt);
   el('div', 'position:absolute;left:50%;top:4%;width:2px;height:42%;margin-left:-1px;border-radius:1px;background:' + P.ink, ptr).className = 'knob-ptr';
-  var lab = el('span', 'margin-top:5px;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
+  var lab = el('span', (UL > 1 ? 'margin-top:3px;line-height:1;' : 'margin-top:5px;') + 'font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
   lab.className = 'knob-label';
   var k = {
     v: 0, R: R, steps: steps(d), def: toV(d, d.def),
@@ -176,7 +178,7 @@ function key(x, y, w, h, label, led, o) {
   if (tint) led = null;
   var b = el('button', at(x, y, w, h) + ';box-sizing:border-box;padding:' + (led != null ? '6px' : '0') + ' 0 0;border:none;border-radius:5px;' +
     'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09);' +
-    'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
+    'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
   b.type = 'button'; b.setAttribute('aria-label', o.aria || label); b.className = tint ? 'key key-tint' : 'key';
   var ledEl = el('span', 'position:absolute;left:50%;top:5px;width:10px;height:3px;margin-left:-5px;border-radius:2px', b);
   var txt = el('span', '', b, o.glyph || label || '');
@@ -294,7 +296,7 @@ var PAD_T = false;                                               // XY pad drawn
 function pt(x, y) { return LAND ? [y, x + 8] : [x, y]; }
 function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
 function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
-var LABEL = 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap';
+function LABEL() { return 'font-size:' + 10 * UL + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap' + (UL > 1 ? ';line-height:1' : ''); }
 
 // Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
 var CONTROLS = {
@@ -344,18 +346,18 @@ function makeKeys(r, fs) {
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
 function makeCamera(cx, cy) {
-  var bw = 104, bx = cx - bw / 2;
-  ui.camOn = key(bx, cy - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
+  var k = UK, bw = 104 * k, bx = cx - bw / 2;
+  ui.camOn = key(bx, cy - 34 * k, bw, 26 * k, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
   ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + i * (bw / 2 + 2), cy - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+    return key(bx + i * (bw / 2 + 2), cy - 2 * k, bw / 2 - 2, 22 * k, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
   });
-  cl(cx, cy + 35, 120, 'Camera', LABEL).className = 'knob-label';
+  cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()).className = 'knob-label';
   syncCam();
 }
 // Chromakey On key centred on (cx, cy), label where a knob of size ks would put it.
 function makeChromaOn(cx, cy, ks) {
-  ui.keyOn = key(cx - 36, cy - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  cl(cx, cy + ks / 2 + 15, 120, 'Enable', LABEL).className = 'knob-label';
+  ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
+  cl(cx, cy + ks / 2 + (UL > 1 ? 13 : 15), 120 * UL, 'Enable', LABEL()).className = 'knob-label';
   syncers.push(syncKeyOn);
   syncKeyOn();
 }
@@ -382,6 +384,7 @@ function layoutKey() { return layoutEngine ? layoutEngine.key() : (wantLand() ? 
 var ui = {};
 function build() {
   hideTip(); panel.innerHTML = ''; syncers = []; ui = {}; SEC_R = 3; PAD_T = false;
+  UK = 1; UL = 1;
   builtKey = layoutKey();
   if (layoutEngine) layoutEngine.build(); else buildDefault(wantLand());
   stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
@@ -394,16 +397,17 @@ function build() {
 
 function buildDefault(land) {
   LAND = land; PAD_T = land;
+  if (!LAND) { UK = 1.5; UL = 2; }   // portrait: controls 1.5x, labels 2x
   SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
   var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
   makeScreen(b[0], b[1], b[2], b[3]);
   // Header keys: a row under the screen (portrait) or a column beside it (landscape).
-  var kn = 6, kg = 10, rects = [];
+  var kn = 6, kg = LAND ? 10 : 6, rects = [];
   for (var i = 0; i < kn; i++) {
     if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]); }
-    else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y, kw, 28]); }
+    else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y - 6, kw, 28 * UK]); }
   }
-  makeKeys(rects, LAND ? 9 : 10);
+  makeKeys(rects, LAND ? 9 : 10 * UL);
   buildLayers();
   buildMix();
   buildRight();
@@ -415,9 +419,9 @@ var PAD = 238;
 function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
   secBox(box(x, LOW_Y, LW, LOW_B - LOW_Y), 'Layers', 'layers');
-  var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
+  var cx = UK > 1 ? [x + 84, x + 230] : [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
   [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
-    var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40, { fam: 'layers' });
+    var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40 * UK, { fam: 'layers' });
   });
 }
 
@@ -524,7 +528,19 @@ function drawPad() {
 function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
-  var ks = 42;
+  var ks = 42 * UK;
+  if (UK > 1) {
+    // Enlarged controls: spread each section's rows between its nameplate and its bottom edge instead of centring
+    // them in the ten equal rows. A control spans R above its centre and R + 3 + 20 (label) below.
+    var R = ks / 2 + 10, rowsIn = function (k0, k1, top) {
+      var a = B(k0) + 8 + 13 + top, b = B(k1) - 8 - 6 - (R + 23), n = k1 - k0, out = [];
+      for (var r = 0; r < n; r++) out.push(n > 1 ? a + (b - a) * r / (n - 1) : a);
+      return out;
+    };
+    var ys = [].concat(rowsIn(0, 2, R + 7.5), rowsIn(2, 5, R), rowsIn(5, 10, R));   // Blend Mode's legend rises 7.5 above its ring
+    cy = function (i) { return ys[i]; };
+    c1 += 8;   // room for Blend Mode's left legend (also keeps the left column clear of the nameplates)
+  }
   secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), 'Feedback', 'feedback');
   var ck = box(RX, B(2) + 8, RW, B(5) - B(2) - 16);
   secBox(ck, 'Chromakey', 'chroma');
@@ -550,8 +566,9 @@ function syncKeySwatch() {
 // Blend Mode positions printed around its knob like a rotary switch; tap a name to pick it.
 function blendLegend(x, y, R) {
   ui.blendLabs = BLEND_NAMES.map(function (n, i) {
-    var a = (-135 + i * 90) * Math.PI / 180, r = R + 7, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a), left = i < 2;
-    var s = el('span', at(left ? lx - 40 : lx, ly - 6, 40, 12) + ';text-align:' + (left ? 'right' : 'left') + ';' + PRINT(9) + ';cursor:pointer', panel, n);
+    var a = (-135 + i * 90) * Math.PI / 180, r = R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a), left = i < 2;
+    var bw = 40 * UL, bh = 12 * UL;
+    var s = el('span', at(left ? lx - bw : lx, ly - bh / 2, bw, bh) + ';text-align:' + (left ? 'right' : 'left') + ';' + PRINT(9 * UL) + ';cursor:pointer', panel, n);
     s.addEventListener('click', function () { ui.blend.set(i / 3); });
     return s;
   });

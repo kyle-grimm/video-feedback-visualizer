@@ -643,3 +643,14 @@ The cyan Layers section now spans the XY pad as well as the four layer controls,
 separate Mix section and its nameplate are gone. Positions are unchanged. (A first attempt that enlarged the
 portrait controls and rearranged that panel was reverted.) Design mode still treats Layers and Mix as separate
 blocks.
+
+## 14. Larger portrait controls, in place (2026-10-12)
+
+In the portrait built-in layout the controls are 1.5x and their labels 2x the base size, with every section where
+it was and the stage still 900 x 1336: knobs 63 px (Layers 60), header keys 42 px tall, camera and Chromakey On
+keys 1.5x, knob labels / key text 20 px, Blend Mode legend 18 px. The makers read `UK` (control scale) and `UL`
+(label scale); `buildDefault` sets 1.5 / 2 for portrait and `build()` resets both to 1, so landscape and design-mode
+layouts are unchanged. Section nameplates and the XY pad keep their size (no room).
+To fit: labels sit 3 px under their ring with line-height 1; each right-column section spreads its rows between its
+nameplate and its bottom edge rather than centring them in the ten equal rows; the left knob column moves in 8 px
+for Blend Mode's legend; the header keys are 6 px higher with 6 px gaps; the Layers controls sit at x 92 / 238.
