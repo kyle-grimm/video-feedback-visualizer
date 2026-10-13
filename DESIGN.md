@@ -668,3 +668,6 @@ anything but `<video>`, and a browser may also refuse the request; both cases di
 On iPhone the browser's own bars stay visible; only an installed home-screen web app could hide them.
 Tested headless at phone size: missing API, refused request (both go to the overlay), and a real click (true
 fullscreen, no overlay). Not yet tried on a real phone.
+
+Update (2026-10-12): portrait controls reduced by 20%, from 1.5x to 1.2x (`UK = 1.2`; knobs 50 px, Layers 48 px,
+header keys 34 px tall). Labels stay 2x. The fitting rules above are unchanged.

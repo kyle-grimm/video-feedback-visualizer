@@ -91,7 +91,7 @@ function dragValue(target, ctl, range) {
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
 var SEC_R = 3; // section corner radius (design mode can change it)
-// Control and label scale for the makers below: 1 by default; the portrait built-in layout sets 1.5 and 2.
+// Control and label scale for the makers below: 1 by default; the portrait built-in layout sets 1.2 and 2.
 var UK = 1, UL = 1;
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
@@ -397,7 +397,7 @@ function build() {
 
 function buildDefault(land) {
   LAND = land; PAD_T = land;
-  if (!LAND) { UK = 1.5; UL = 2; }   // portrait: controls 1.5x, labels 2x
+  if (!LAND) { UK = 1.2; UL = 2; }   // portrait: controls 1.2x, labels 2x
   SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
   var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
   makeScreen(b[0], b[1], b[2], b[3]);
