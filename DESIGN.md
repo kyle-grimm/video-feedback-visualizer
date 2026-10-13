@@ -436,6 +436,24 @@ size. A rotation while fullscreen is applied when fullscreen ends.
 Theme: Anodized (brushed-metal grain over a saturated tint per parameter family,
 family-coloured nameplates), chosen from nine candidates.
 
+**Design mode (2026-10-12, `design.js`).** Experimentation tooling opened by the
+Design key on the screen's top left: preference-driven evolution of layouts and
+colour schemes. A layout genome is a split tree whose leaves are the blocks
+(screen, keys, Layers, Mix, Feedback, Chromakey, Transform, Color), plus screen
+aspect, knob scale, gap, padding, corner radius and per-section columns. Blocks
+grid their controls (`SECTIONS` / `CONTROLS` in script.js) inside their box, on
+a stage shaped like the window; candidates that would be unusable are rejected.
+A colour genome covers family hues and saturation, panel and nameplate lightness,
+stage colour, texture and sheen, outline / nameplate / pointer / label / knob-cap
+styles and the glass accents, applied as CSS through `data-fam` and `knob-*`
+hooks. The user rates 8 candidates per generation with 1-5 stars. Evolve keeps
+the top 2, breeds 5 (crossover and mutation, weighted by stars squared) and adds
+1 random newcomer. Adopt makes a candidate the app's normal look (localStorage
+`vfv-design-v1`), and Export copies the adopted genomes as JSON so they can be
+built in. script.js exposes the makers (`makeScreen`, `makeKeys`, `makeItem`,
+`makePad`, `makeSwatch`) and a `layoutEngine` / `onPanelBuilt` hook; the
+built-in layouts use the same makers.
+
 The rest of this section is the earlier plan, kept for history.
 
 Reuse the existing dark-panel conventions from the sibling projects

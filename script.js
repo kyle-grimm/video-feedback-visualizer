@@ -90,21 +90,22 @@ function dragValue(target, ctl, range) {
 
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
+var SEC_R = 3; // section corner radius (design mode can change it)
 function sec(x, y, w, h, title, fam) {
   if (fam) famFill(fam, x, y, w, h, roundedPath([[0, 0], [w, 0], [w, h], [0, h]]));
-  var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:3px;pointer-events:none');
-  if (fam) b.className = 'frame frame-' + fam;
-  nameplate(b, 12, -9, title, fam);
+  var b = el('div', at(x, y, w, h) + ';box-sizing:border-box;border:1px solid ' + P.inkMute + ';border-radius:' + SEC_R + 'px;pointer-events:none');
+  if (fam) { b.className = 'frame frame-' + fam; b.dataset.fam = fam; }
+  b.tab = nameplate(b, 12, -9, title, fam);
   return b;
 }
 function nameplate(parent, x, y, title, fam) {
   var t = el('span', at(x, y) + ';padding:2px 8px;background:' + P.ink + ';color:#19181a;font-size:10px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;line-height:14px;white-space:pre', parent, title);
-  if (fam) t.className = 'tab tab-' + fam;
+  if (fam) { t.className = 'tab tab-' + fam; t.dataset.fam = fam; }
   return t;
 }
 // Path through right-angled points (clockwise) with 3 px rounded corners, offset by (ox, oy).
 function roundedPath(pts, ox, oy) {
-  var r = 3, d = '';
+  var r = SEC_R, d = '';
   ox = ox || 0; oy = oy || 0;
   for (var i = 0; i < pts.length; i++) {
     var p0 = pts[(i + pts.length - 1) % pts.length], p1 = pts[i], p2 = pts[(i + 1) % pts.length];
@@ -117,7 +118,7 @@ function roundedPath(pts, ox, oy) {
 // The family's surface: a box clipped to the section's shape, behind everything drawn after it.
 function famFill(fam, x, y, w, h, d) {
   var f = el('div', at(x, y, w, h) + ';pointer-events:none;clip-path:path("' + d + '");-webkit-clip-path:path("' + d + '")');
-  f.className = 'fam fam-' + fam;
+  f.className = 'fam fam-' + fam; f.dataset.fam = fam;
   return f;
 }
 // Knob scale: n ticks spread over the 270-degree sweep (11 by default; stepped knobs get one tick per position).
@@ -127,20 +128,24 @@ function scaleCss(n) {
     '-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 6px),#000 calc(100% - 5px)),conic-gradient(from -137deg,#000 0deg 274deg,transparent 274deg);-webkit-mask-composite:source-in;' +
     'mask:radial-gradient(closest-side,transparent calc(100% - 6px),#000 calc(100% - 5px)),conic-gradient(from -137deg,#000 0deg 274deg,transparent 274deg);mask-composite:intersect;pointer-events:none';
 }
-// MS-20 knob centred on (x, y) bound to params[key] through definition PD[key]. o: fs, ticks, after.
+// MS-20 knob centred on (x, y) bound to params[key] through definition PD[key]. o: fs, ticks, after, fam.
+// Parts carry knob-* classes (and the wrap data-fam) so design-mode colour schemes can restyle them.
 var syncers = [];
 function knob(x, y, size, label, key, o) {
   o = o || {};
   var d = PD[key], R = size / 2 + 10, S = 2 * R;
   var wrap = el('div', at(x - R - 16, y - R, S + 32) + ';display:flex;flex-direction:column;align-items:center;pointer-events:none');
+  wrap.className = 'knob'; if (o.fam) wrap.dataset.fam = o.fam;
   var ring = el('div', 'position:relative;flex:none;width:' + S + 'px;height:' + S + 'px;cursor:ns-resize;touch-action:none;pointer-events:auto', wrap);
   ring.setAttribute('role', 'slider'); ring.tabIndex = 0;
-  el('div', scaleCss(o.ticks || 11), ring);
+  el('div', scaleCss(o.ticks || 11), ring).className = 'knob-scale';
   var skirt = el('div', 'position:absolute;left:10px;top:10px;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:repeating-conic-gradient(#1f1e21 0deg 4deg,#121113 4deg 8deg);box-shadow:0 0 0 1px #050505,0 6px 10px rgba(0,0,0,0.6);pointer-events:none', ring);
-  el('div', 'position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 45% 35%,#3b393e 0%,#201f22 60%,#161517 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.10)', skirt);
+  skirt.className = 'knob-skirt';
+  el('div', 'position:absolute;inset:15%;border-radius:50%;background:radial-gradient(circle at 45% 35%,#3b393e 0%,#201f22 60%,#161517 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,0.10)', skirt).className = 'knob-cap';
   var ptr = el('div', 'position:absolute;inset:0', skirt);
-  el('div', 'position:absolute;left:50%;top:4%;width:2px;height:42%;margin-left:-1px;border-radius:1px;background:' + P.ink, ptr);
+  el('div', 'position:absolute;left:50%;top:4%;width:2px;height:42%;margin-left:-1px;border-radius:1px;background:' + P.ink, ptr).className = 'knob-ptr';
   var lab = el('span', 'margin-top:5px;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
+  lab.className = 'knob-label';
   var k = {
     v: 0, R: R, steps: steps(d), def: toV(d, d.def),
     text: function () { return label + '  ' + d.f(params[key]); },
@@ -172,7 +177,7 @@ function key(x, y, w, h, label, led, o) {
   var b = el('button', at(x, y, w, h) + ';box-sizing:border-box;padding:' + (led != null ? '6px' : '0') + ' 0 0;border:none;border-radius:5px;' +
     'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09);' +
     'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
-  b.type = 'button'; b.setAttribute('aria-label', o.aria || label);
+  b.type = 'button'; b.setAttribute('aria-label', o.aria || label); b.className = tint ? 'key key-tint' : 'key';
   var ledEl = el('span', 'position:absolute;left:50%;top:5px;width:10px;height:3px;margin-left:-5px;border-radius:2px', b);
   var txt = el('span', '', b, o.glyph || label || '');
   var k = {
@@ -265,61 +270,139 @@ function hslToRgb(h, s, l) {
 }
 
 // -------------------------------------------------------------
-// 3. Panel layout, in two orientations chosen by the window's shape (or #portrait / #landscape in the URL).
-// Portrait, 900 x 1336: the 9:16 screen top left with the header keys under it, the Layers knobs
-// and XY Mix pad below that, and the effect knobs in two columns down the right.
+// 3. Panel layout.
+// Makers place one part of the panel at stage coordinates: makeScreen, makeKeys, makeItem (a knob, the Camera
+// cluster or the Chromakey On key, from CONTROLS), makePad and makeSwatch. SECTIONS lists each parameter family's
+// controls. The built-in layouts (buildDefault) and design mode (design.js, through layoutEngine) both use them.
+//
+// Built-in layouts, chosen by the window's shape (or #portrait / #landscape in the URL):
+// Portrait, 900 x 1336: the 9:16 screen top left with the header keys under it, the Layers knobs and XY Mix pad below
+// that, and the effect knobs in two columns down the right.
 // Landscape, 1336 x 908: the same panel rotated 90 degrees clockwise and flipped horizontally (a transpose). The screen
 // stays top left but turns 16:9, the header keys stand in a column to its right, Layers and Mix sit right of that, the
 // effect knobs run in two rows along the bottom.
-// Everything is written in portrait coordinates; pt() and box() transpose them for landscape (y gains 8 so the top
-// nameplates clear the edge).
+// Written in portrait coordinates; pt() and box() transpose them for landscape (y gains 8 so the top nameplates clear
+// the edge).
 // -------------------------------------------------------------
 var M = 8;
 var LW = 560, RX = M + LW + 16, RW = 900 - M - RX;               // left column (screen) and right column (knobs)
 var BEZ = [M, 16, LW, 980];                                      // bezel; the canvas inside is 540 x 960 (9:16)
 var KEY_Y = 1008, LOW_Y = 1056, LOW_B = 1328;
 var ROW_Y0 = 8, ROW_P = (LOW_B + 8 - ROW_Y0) / 10;               // ten knob rows on the right
-var LAND = false, SW = 900, SH = LOW_B + 8, CW = 720, CH = 1280;      // orientation, stage size, render resolution
+var LAND = false, SW = 900, SH = LOW_B + 8, CW = 720, CH = 1280;  // orientation, stage size, render resolution
+var PAD_T = false;                                               // XY pad drawn transposed (landscape built-in layout)
 function pt(x, y) { return LAND ? [y, x + 8] : [x, y]; }
 function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
 function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
-function knobAt(x, y, size, label, key, o) { var p = pt(x, y); return knob(p[0], p[1], size, label, key, o); }
 var LABEL = 'font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap';
+
+// Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
+var CONTROLS = {
+  blendMode: ['Blend Mode', { ticks: 4, after: function () { syncBlendLegend(); }, legend: true }],
+  modulateAmount: ['Modulate'], feedback: ['Persistence'], delay: ['Delay'],
+  keyOn: ['Enable'], keyHue: ['Key Hue', { after: function () { syncKeySwatch(); } }],
+  keySat: ['Key Sat', { after: function () { syncKeySwatch(); } }], keyLight: ['Key Light', { after: function () { syncKeySwatch(); } }],
+  chromakeyThreshold: ['Threshold'], chromakeySoftness: ['Softness'],
+  zoom: ['Zoom'], rotate: ['Rotate'], translateX: ['Shift X'], translateY: ['Shift Y'], hueDrift: ['Hue Drift'],
+  hue: ['Hue'], saturate: ['Saturation'], brightness: ['Brightness'], contrast: ['Contrast'], invertAmount: ['Invert'],
+  camera: ['Camera'], speed: ['Osc Speed'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }]
+};
+var SECTIONS = {
+  feedback: { title: 'Feedback', items: ['blendMode', 'modulateAmount', 'feedback', 'delay'] },
+  chroma: { title: 'Chromakey', items: ['keyOn', 'keyHue', 'keySat', 'keyLight', 'chromakeyThreshold', 'chromakeySoftness'] },
+  transform: { title: 'Transform', items: ['zoom', 'rotate', 'translateX', 'translateY', 'hueDrift'] },
+  color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast', 'invertAmount'] },
+  layers: { title: 'Layers', items: ['camera', 'speed', 'noiseScale', 'shapeSides'] },
+  mix: { title: 'Mix', items: [] }
+};
 
 // The WebGL canvas outlives layout rebuilds (its context, programs and camera texture stay); only its size changes.
 var glCanvas = document.createElement('canvas');
 glCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
 
-var ui = {};
-function build(land) {
-  LAND = land;
-  SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
-  hideTip(); panel.innerHTML = ''; syncers = []; ui = {};
-  stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
-
-  // Screen: a bezel holding the WebGL canvas, no text. Double-click for fullscreen.
-  var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
-  var bez = el('div', at(b[0], b[1], b[2], b[3]) + ';box-sizing:border-box;padding:10px;border-radius:8px;background:#0b0b0c;box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)');
+// Screen: a bezel holding the WebGL canvas, no text. Double-click for fullscreen.
+function makeScreen(x, y, w, h) {
+  ui.bezel = [x, y, w, h];
+  var bez = el('div', at(x, y, w, h) + ';box-sizing:border-box;padding:10px;border-radius:8px;background:#0b0b0c;box-shadow:inset 0 2px 6px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.06)');
+  bez.className = 'bezel';
   bez.setAttribute('aria-label', 'Video feedback output');
   ui.screen = el('div', 'position:relative;width:100%;height:100%;border-radius:3px;background:#000;overflow:hidden', bez);
   ui.screen.id = 'screen';
   ui.screen.appendChild(glCanvas);
-  if (glCanvas.width !== CW || glCanvas.height !== CH) { glCanvas.width = CW; glCanvas.height = CH; }
   ui.screen.addEventListener('dblclick', toggleFullscreen);
-
-  // Header keys: a row under the screen (portrait) or a column beside it (landscape).
-  var kn = 5, kg = 10, kpos = function (i) {
-    if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; return [BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]; }
-    var kw = (LW - (kn - 1) * kg) / kn; return [M + i * (kw + kg), KEY_Y, kw, 28];
-  };
-  var K = function (i, label, led, o) { var p = kpos(i); o.fs = LAND ? 9 : 10; return key(p[0], p[1], p[2], p[3], label, led, o); };
+}
+// Header keys: Pause, Freeze, Reset, Random, Full in the five rects [x, y, w, h].
+function makeKeys(r, fs) {
+  var K = function (i, label, led, o) { o.fs = fs || 10; return key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); };
   ui.pause = K(0, 'Pause', 'off', { tint: 'blue', aria: 'Pause time', onClick: function () { timePaused = !timePaused; ui.pause.set(timePaused ? 'on' : 'off'); } });
   ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); } });
   ui.reset = K(2, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
   ui.rand = K(3, 'Random', null, { aria: 'Randomize', onClick: randomize });
   ui.full = K(4, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
   ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off');
+}
+// Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
+function makeCamera(cx, cy) {
+  var bw = 104, bx = cx - bw / 2;
+  ui.camOn = key(bx, cy - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
+  ui.camFacing = ['user', 'environment'].map(function (f, i) {
+    return key(bx + i * (bw / 2 + 2), cy - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+  });
+  cl(cx, cy + 35, 120, 'Camera', LABEL).className = 'knob-label';
+  syncCam();
+}
+// Chromakey On key centred on (cx, cy), label where a knob of size ks would put it.
+function makeChromaOn(cx, cy, ks) {
+  ui.keyOn = key(cx - 36, cy - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
+  cl(cx, cy + ks / 2 + 15, 120, 'Enable', LABEL).className = 'knob-label';
+  syncers.push(syncKeyOn);
+  syncKeyOn();
+}
+// One control by id, its knob ring (or key cluster) centred on (cx, cy). o: fam, legend (room for Blend Mode's legend).
+function makeItem(id, cx, cy, size, o) {
+  o = o || {};
+  if (id === 'camera') return makeCamera(cx, cy);
+  if (id === 'keyOn') return makeChromaOn(cx, cy, size);
+  var c = CONTROLS[id], opts = Object.assign({ fam: o.fam }, c[1] || {});
+  var k = knob(cx, cy, size, c[0], id, opts);
+  if (id === 'blendMode') { ui.blend = k; if (o.legend !== false) blendLegend(cx, cy, k.R); }
+  return k;
+}
+// A chip of the key colour, usually beside the Chromakey nameplate.
+function makeSwatch(x, y) {
+  ui.keySwatch = el('span', at(x, y, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
+  syncKeySwatch();
+}
 
+// Layout engine hook: design.js sets { key(): string, build(): void } to replace the built-in layouts. key() changes
+// whenever the layout should be rebuilt (window shape, candidate); build() sets SW / SH / CW / CH and places the parts.
+var layoutEngine = null, builtKey = '';
+function layoutKey() { return layoutEngine ? layoutEngine.key() : (wantLand() ? 'land' : 'port'); }
+var ui = {};
+function build() {
+  hideTip(); panel.innerHTML = ''; syncers = []; ui = {}; SEC_R = 3; PAD_T = false;
+  builtKey = layoutKey();
+  if (layoutEngine) layoutEngine.build(); else buildDefault(wantLand());
+  stage.style.width = SW + 'px'; stage.style.height = SH + 'px';
+  if (glCanvas.width !== CW || glCanvas.height !== CH) {
+    glCanvas.width = CW; glCanvas.height = CH;
+    if (typeof gl !== 'undefined' && gl && buffers) resizeTargets();
+  }
+  if (window.onPanelBuilt) window.onPanelBuilt();
+}
+
+function buildDefault(land) {
+  LAND = land; PAD_T = land;
+  SW = LAND ? LOW_B + 8 : 900; SH = LAND ? 908 : LOW_B + 8; CW = LAND ? 1280 : 720; CH = LAND ? 720 : 1280;
+  var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
+  makeScreen(b[0], b[1], b[2], b[3]);
+  // Header keys: a row under the screen (portrait) or a column beside it (landscape).
+  var kn = 5, kg = 10, rects = [];
+  for (var i = 0; i < kn; i++) {
+    if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]); }
+    else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y, kw, 28]); }
+  }
+  makeKeys(rects, LAND ? 9 : 10);
   buildLayers();
   buildMix();
   buildRight();
@@ -331,17 +414,9 @@ function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
   secBox(box(x, LOW_Y, w, LOW_B - LOW_Y), 'Layers', 'layers');
   var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
-  // Camera: On (enable) over a Front / Back pair.
-  var c = pt(cx[0], cy[0]), bw = 104, bx = c[0] - bw / 2;
-  ui.camOn = key(bx, c[1] - 34, bw, 26, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
-  ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + i * (bw / 2 + 2), c[1] - 2, bw / 2 - 2, 22, i ? 'Back' : 'Front', 'off', { fs: 9, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+  [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
+    var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40, { fam: 'layers' });
   });
-  cl(c[0], c[1] + 35, 120, 'Camera', LABEL);
-  syncCam();
-  knobAt(cx[1], cy[0], 40, 'Osc Speed', 'speed');
-  knobAt(cx[0], cy[1], 40, 'Noise Scale', 'noiseScale');
-  knobAt(cx[1], cy[1], 40, 'Shape Sides', 'shapeSides', { ticks: 10, after: drawPad });
 }
 
 // Mix: XY pad crossfading the four layers' opacity.
@@ -364,18 +439,22 @@ function polygonPath(n) {
   for (var i = 0; i < n; i++) { var a = i / n * TAU; d += (i ? 'L' : 'M') + (50 + 34 * Math.sin(a)).toFixed(2) + ' ' + (54 - 34 * Math.cos(a)).toFixed(2); }
   return d + 'Z';
 }
-// Pad space (u rightward, v downward, 0..1) <-> mixer position. The pad transposes with the panel, so the layers keep
-// their corners relative to the Layers knobs: portrait u = mixX, v = 1 - mixY; landscape u = 1 - mixY, v = mixX.
-function mixToPad() { return LAND ? [1 - params.mixY, params.mixX] : [params.mixX, 1 - params.mixY]; }
+// Pad space (u rightward, v downward, 0..1) <-> mixer position. A transposed pad (PAD_T) keeps the layers' corners
+// matching transposed Layers knobs: normal u = mixX, v = 1 - mixY; transposed u = 1 - mixY, v = mixX.
+function mixToPad() { return PAD_T ? [1 - params.mixY, params.mixX] : [params.mixX, 1 - params.mixY]; }
 function padToMix(u, v) {
   u = clamp(u); v = clamp(v);
-  if (LAND) { params.mixY = 1 - u; params.mixX = v; } else { params.mixX = u; params.mixY = 1 - v; }
+  if (PAD_T) { params.mixY = 1 - u; params.mixX = v; } else { params.mixX = u; params.mixY = 1 - v; }
   drawPad();
 }
 function buildMix() {
   var s = box(M + 278 + 16, LOW_Y, LW - 278 - 16, LOW_B - LOW_Y);
   secBox(s, 'Mix', 'mix');
-  ui.pad = glass(s[0] + (s[2] - PAD) / 2, s[1] + 20, PAD, PAD, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
+  makePad(s[0] + (s[2] - PAD) / 2, s[1] + 20, PAD);
+}
+// XY pad: a square glass screen of side `size` at (x, y).
+function makePad(x, y, size) {
+  ui.pad = glass(x, y, size, size, 'Layer mixer: drag to crossfade Camera, Oscillator, Noise and Shape');
   var g = ui.pad.g;
   g.style.cursor = 'crosshair'; g.style.touchAction = 'none';
   g.setAttribute('role', 'slider'); g.tabIndex = 0;
@@ -408,7 +487,7 @@ function drawPad() {
   var icons = [PAD_ICONS.camera, PAD_ICONS.osc, PAD_ICONS.noise, polygonPath(Math.round(params.shapeSides))];
   var names = ['Camera', 'Osc', 'Noise', 'Shape'];
   icons.forEach(function (d, i) {
-    var col = LAND ? Math.floor(i / 2) : i % 2, row = LAND ? i % 2 : Math.floor(i / 2);
+    var col = PAD_T ? Math.floor(i / 2) : i % 2, row = PAD_T ? i % 2 : Math.floor(i / 2);
     var ox = col * q, oy = row * q, s = q * 0.5 / 100;
     c.save();
     c.globalAlpha = 0.22 + 0.78 * wt[i];
@@ -450,32 +529,16 @@ function buildRight() {
   secBox(ck, 'Chromakey', 'chroma');
   secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Transform', 'transform');
   secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Color', 'color');
-
-  ui.blend = knobAt(c1, cy(0), ks, 'Blend Mode', 'blendMode', { ticks: 4, after: syncBlendLegend });
-  var bp = pt(c1, cy(0));
-  blendLegend(bp[0], bp[1], ui.blend.R);
-  knobAt(c2, cy(0), ks, 'Modulate', 'modulateAmount');
-  knobAt(c1, cy(1), ks, 'Persistence', 'feedback');
-  knobAt(c2, cy(1), ks, 'Delay', 'delay');
-
-  var ep = pt(c1, cy(2));
-  ui.keyOn = key(ep[0] - 36, ep[1] - 14, 72, 28, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  cl(ep[0], ep[1] + ks / 2 + 15, 120, 'Enable', LABEL);
-  syncers.push(syncKeyOn);
-  syncKeyOn();
-  knobAt(c2, cy(2), ks, 'Key Hue', 'keyHue', { after: syncKeySwatch });
-  knobAt(c1, cy(3), ks, 'Key Sat', 'keySat', { after: syncKeySwatch });
-  knobAt(c2, cy(3), ks, 'Key Light', 'keyLight', { after: syncKeySwatch });
-  knobAt(c1, cy(4), ks, 'Threshold', 'chromakeyThreshold');
-  knobAt(c2, cy(4), ks, 'Softness', 'chromakeySoftness');
-
-  [['Zoom', 'zoom'], ['Rotate', 'rotate'], ['Shift X', 'translateX'], ['Shift Y', 'translateY'], ['Hue Drift', 'hueDrift']]
-    .forEach(function (d, i) { knobAt(c1, cy(5 + i), ks, d[0], d[1]); });
-  [['Hue', 'hue'], ['Saturation', 'saturate'], ['Brightness', 'brightness'], ['Contrast', 'contrast'], ['Invert', 'invertAmount']]
-    .forEach(function (d, i) { knobAt(c2, cy(5 + i), ks, d[0], d[1]); });
-  // A chip of the key colour beside the Chromakey nameplate.
-  ui.keySwatch = el('span', at(ck[0] + 116, ck[1] - 6, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
-  syncKeySwatch();
+  var place = function (fam, cols, row0) {
+    SECTIONS[fam].items.forEach(function (id, i) {
+      var p = pt(cols[i % cols.length], cy(row0 + Math.floor(i / cols.length))); makeItem(id, p[0], p[1], ks, { fam: fam });
+    });
+  };
+  place('feedback', [c1, c2], 0);
+  place('chroma', [c1, c2], 2);
+  place('transform', [c1], 5);
+  place('color', [c2], 5);
+  makeSwatch(ck[0] + 116, ck[1] - 6);
 }
 function syncKeyOn() { if (ui.keyOn) ui.keyOn.set(params.chromakeyEnabled ? 'on' : 'off'); }
 function syncKeySwatch() {
@@ -506,7 +569,7 @@ function wantLand() {
   if (/portrait/.test(location.hash)) return false;
   var v = viewSize(); return v[0] > v[1];
 }
-build(wantLand());
+build();
 
 // -------------------------------------------------------------
 // 4. WebGL2 boilerplate + ring-buffer framebuffers
@@ -1036,7 +1099,7 @@ function clearScreen() {
   lastWritten = buffers[0];
 }
 
-// After a layout change the render size flips (720 x 1280 <-> 1280 x 720): replace the ring buffers at the new size.
+// After a layout change the render size can flip (720 x 1280 <-> 1280 x 720): replace the ring buffers at the new size.
 function resizeTargets() {
   buffers.forEach(function (b) { gl.deleteFramebuffer(b.fbo); gl.deleteTexture(b.tex); });
   buffers = createRingBuffers();
@@ -1076,11 +1139,10 @@ function viewSize() {
   if (v && v.width > 0 && v.height > 0) return [v.width * v.scale, v.height * v.scale];
   return [window.innerWidth, window.innerHeight];
 }
-// Rebuild the panel when the window changes orientation (not while the screen is fullscreen: rebuilding would drop
-// the fullscreen element, so that waits for fullscreenchange).
+// Rebuild the panel when its layout key changes (window orientation, or a design-mode candidate / window shape), but
+// not while the screen is fullscreen: rebuilding would drop the fullscreen element, so that waits for fullscreenchange.
 function fit() {
-  var land = wantLand();
-  if (land !== LAND && !currentFullscreenElement()) { build(land); resizeTargets(); }
+  if (layoutKey() !== builtKey && !currentFullscreenElement()) build();
   var v = viewSize(), k = Math.min(v[0] / SW, v[1] / SH);
   stage.dataset.scale = String(k);
   stage.style.transform = 'translate(' + ((v[0] - SW * k) / 2) + 'px,' + ((v[1] - SH * k) / 2) + 'px) scale(' + k + ')';
