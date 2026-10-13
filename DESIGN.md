@@ -636,3 +636,10 @@ MP4 box layout, `avcC` profile and level, sample count, and what a `<video>` ele
 dense). Clicking Record, then Stop, through the real render loop produced a file that Windows reports as
 720 x 1280, 60.00 fps, H.264. The MediaRecorder fallback produced an H.264 .mp4 at 720 x 1280. Not yet tried on
 phones (iOS Safari has WebCodecs H.264 from 16.4; downloads there go through the Files prompt).
+
+## 13. Layers holds the mixer (2026-10-12)
+
+The cyan Layers section now spans the XY pad as well as the four layer controls, in both built-in layouts; the
+separate Mix section and its nameplate are gone. Positions are unchanged. (A first attempt that enlarged the
+portrait controls and rearranged that panel was reverted.) Design mode still treats Layers and Mix as separate
+blocks.

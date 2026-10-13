@@ -409,18 +409,19 @@ function buildDefault(land) {
   buildRight();
 }
 
-// Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape).
+// Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape). The
+// section spans the pad too: the mixer belongs to Layers, with no section of its own.
 var PAD = 238;
 function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
-  secBox(box(x, LOW_Y, w, LOW_B - LOW_Y), 'Layers', 'layers');
+  secBox(box(x, LOW_Y, LW, LOW_B - LOW_Y), 'Layers', 'layers');
   var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
   [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
     var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40, { fam: 'layers' });
   });
 }
 
-// Mix: XY pad crossfading the four layers' opacity.
+// Mixer: XY pad crossfading the four layers' opacity, inside the Layers section.
 var PAD_ICONS = (function () {
   var noise = '', i, t;
   for (i = 0; i <= 360; i++) {
@@ -450,7 +451,6 @@ function padToMix(u, v) {
 }
 function buildMix() {
   var s = box(M + 278 + 16, LOW_Y, LW - 278 - 16, LOW_B - LOW_Y);
-  secBox(s, 'Mix', 'mix');
   makePad(s[0] + (s[2] - PAD) / 2, s[1] + 20, PAD);
 }
 // XY pad: a square glass screen of side `size` at (x, y).
