@@ -437,7 +437,7 @@ Theme: Anodized (brushed-metal grain over a saturated tint per parameter family,
 family-coloured nameplates), chosen from nine candidates.
 
 **Design mode (2026-10-12, `design.js`).** Experimentation tooling opened by the
-Design key on the screen's top left: preference-driven evolution of layouts and
+Design key on the screen's top left (hidden since 2026-10-12; add `#design` to the URL to show it): preference-driven evolution of layouts and
 colour schemes. A layout genome is a split tree whose leaves are the blocks
 (screen, keys, Layers, Mix, Feedback, Chromakey, Transform, Color), plus screen
 aspect, knob scale, gap, padding, corner radius and per-section columns. Blocks
@@ -599,3 +599,35 @@ work is small. What actually cost something:
 Not changed, on purpose: the render resolution stays 720 x 1280 / 1280 x 720 even when the screen is shown smaller.
 The feedback's per-frame resampling blur is in texels, so a lower resolution would change how the image smears and
 evolves, not just its sharpness. A "render quality" setting could trade that off later if phones need it.
+
+## 12. Recording (2026-10-12)
+
+The header keys are now Pause, Freeze, Reset, Random, **Record**, Full. Record starts a take (red LED, label
+Stop); Stop finishes it (Saving) and the browser downloads `feedback-YYYY-MM-DD-HHMMSS.mp4`, which lands in the
+Downloads folder unless the browser is set to ask.
+
+- **What is recorded:** the output canvas at its full render resolution (720 x 1280 portrait, 1280 x 720
+  landscape), not the scaled on-screen copy. No panel, no audio. Upscaling on export would add no detail, and
+  rendering larger would change how the feedback evolves (see §11), so the render size is the maximum.
+- **Encoding:** WebCodecs `VideoEncoder`, H.264 High profile (falls back to Main, then Baseline), variable bitrate
+  of about 0.32 bits per pixel per frame (17.7 Mbps at 720p60, capped at 50 Mbps), keyframe every 2 s,
+  `latencyMode: 'quality'`. Muxed into a standard MP4 by `vendor/mp4-muxer.min.js` (mp4-muxer 5.2.2, MIT), with
+  `moov` at the end.
+- **Constant 60 fps:** each frame the render loop draws (the fixed 60 fps grid from §11) is encoded with timestamp
+  n / 60 s, so the file plays at the designed speed regardless of display refresh rate or timing jitter. Freeze
+  holds the frozen image in the recording rather than pausing it. If the encoder falls behind, a frame is skipped
+  (the previous one is held longer) instead of piling up GPU frames: the queue limit is 12, or 45 until the encoder
+  has produced its first output and worked off that backlog (a hardware encoder takes about 0.3 s to start).
+- **Memory:** the muxer streams through `StreamTarget` into Blob parts, folded every 32 MB so the browser can move
+  them to disk; late header fix-ups are spliced in with `Blob.slice`. A take is not held in the JS heap.
+- **Fallback:** without WebCodecs, `MediaRecorder` on `canvas.captureStream(60)`, preferring
+  `video/mp4;codecs=avc1` (H.264), else WebM.
+- **Ends itself** if the render size changes mid-take (the window rotates between portrait and landscape); what
+  was recorded is saved.
+
+Self-test: `index.html#rectest` feeds 180 frames in real time through the recorder and reports the file size,
+MP4 box layout, `avcC` profile and level, sample count, and what a `<video>` element decodes. GTX 1070 / Chrome:
+180 of 180 frames, no drops over 4 runs, 3.000 s, 7.2 MB (about 19 Mbps; the noise and oscillator layers are
+dense). Clicking Record, then Stop, through the real render loop produced a file that Windows reports as
+720 x 1280, 60.00 fps, H.264. The MediaRecorder fallback produced an H.264 .mp4 at 720 x 1280. Not yet tried on
+phones (iOS Safari has WebCodecs H.264 from 16.4; downloads there go through the Files prompt).

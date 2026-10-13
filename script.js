@@ -14,7 +14,7 @@
 //   5. GLSL source (vertex, feedback fragment, display fragment)
 //   6. Camera source
 //   7. Uniform upload + render loop
-//   8. Header keys (pause/freeze/reset/random/fullscreen), fit to window
+//   8. Header keys (pause/freeze/reset/random/record/fullscreen), recording, fit to window
 // ===================================================================
 
 var REPORT = [];
@@ -331,15 +331,16 @@ function makeScreen(x, y, w, h) {
   ui.screen.appendChild(glCanvas);
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys: Pause, Freeze, Reset, Random, Full in the five rects [x, y, w, h].
+// Header keys: Pause, Freeze, Reset, Random, Record, Full in the six rects [x, y, w, h].
 function makeKeys(r, fs) {
   var K = function (i, label, led, o) { o.fs = fs || 10; return key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); };
   ui.pause = K(0, 'Pause', 'off', { tint: 'blue', aria: 'Pause time', onClick: function () { timePaused = !timePaused; ui.pause.set(timePaused ? 'on' : 'off'); } });
   ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); } });
   ui.reset = K(2, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
   ui.rand = K(3, 'Random', null, { aria: 'Randomize', onClick: randomize });
-  ui.full = K(4, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
-  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off');
+  ui.rec = K(4, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording });
+  ui.full = K(5, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off'); syncRec();
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
 function makeCamera(cx, cy) {
@@ -397,7 +398,7 @@ function buildDefault(land) {
   var b = box(BEZ[0], BEZ[1], BEZ[2], BEZ[3]);
   makeScreen(b[0], b[1], b[2], b[3]);
   // Header keys: a row under the screen (portrait) or a column beside it (landscape).
-  var kn = 5, kg = 10, rects = [];
+  var kn = 6, kg = 10, rects = [];
   for (var i = 0; i < kn; i++) {
     if (LAND) { var kh = (LW - (kn - 1) * kg) / kn; rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]); }
     else { var kw = (LW - (kn - 1) * kg) / kn; rects.push([M + i * (kw + kg), KEY_Y, kw, 28]); }
@@ -1129,10 +1130,13 @@ function frame(now) {
   if (!timePaused) simTime += dt;
   if (now < nextRender - 1) return;
   nextRender = now - nextRender > 3 * FRAME_MS ? now + FRAME_MS : nextRender + FRAME_MS;
-  if (frozen || contextLost) return;
-  updateCameraTexture();
-  renderFeedbackPass(simTime);
-  renderDisplayPass();
+  if (contextLost) return;
+  if (!frozen) {
+    updateCameraTexture();
+    renderFeedbackPass(simTime);
+    renderDisplayPass();
+  } else if (rec) renderDisplayPass();   // a recording keeps running through a freeze, holding the frozen image
+  if (rec) rec.capture();
 }
 
 // A lost WebGL context (GPU reset, driver update, memory pressure) drops every program, texture and framebuffer;
@@ -1197,6 +1201,145 @@ function toggleFullscreen() {
 function syncFullscreen() { ui.full.set(currentFullscreenElement() === ui.screen ? 'on' : 'off'); fit(); }
 document.addEventListener('fullscreenchange', syncFullscreen);
 document.addEventListener('webkitfullscreenchange', syncFullscreen);
+
+// Record: the output canvas at its full render resolution (720 x 1280 or 1280 x 720), H.264 in an .mp4 at a constant
+// 60 fps, saved through the browser's download (the Downloads folder). Every frame the loop renders is encoded with
+// the timestamp n / 60 s, so the file plays at the designed speed whatever the display's refresh rate or jitter.
+// WebCodecs VideoEncoder + mp4-muxer (vendor/) where available; otherwise MediaRecorder on canvas.captureStream (an
+// .mp4 when the browser can record H.264, else .webm). The muxer streams into Blob parts, which the browser may keep
+// on disk, so long takes don't sit in JS memory. The take ends and saves if the render size changes (a rotation).
+var rec = null;
+var REC_FPS = 60, REC_GOP = 2 * REC_FPS;
+function recBitrate(w, h) { return Math.round(Math.min(50e6, w * h * REC_FPS * 0.32)); }   // ~17.7 Mbps at 720p60
+function syncRec() {
+  if (!ui.rec) return;
+  ui.rec.set(rec ? (rec.saving ? 'sel' : 'rec') : 'off');
+  ui.rec.txt.textContent = rec ? (rec.saving ? 'Saving' : 'Stop') : 'Record';
+  ui.rec.b.setAttribute('aria-label', rec ? 'Stop recording and save' : 'Record the output to a video file');
+}
+function toggleRecording() {
+  if (rec) { if (!rec.saving) rec.stop(); return; }
+  startRecording().catch(function (e) { REPORT.push('REC ' + (e && e.message || e)); rec = null; syncRec(); flash(ui.rec); });
+}
+function recFileName(ext) {
+  var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };
+  return 'feedback-' + d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + '.' + ext;
+}
+function saveBlob(blob, name) {
+  var a = document.createElement('a'), url = URL.createObjectURL(blob);
+  a.href = url; a.download = name; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  window.__lastRecording = { name: name, size: blob.size, type: blob.type, blob: blob };
+}
+// The muxer's output as Blob parts. Writes are mostly appends; the few that land earlier (header fix-ups at the end)
+// are spliced in with Blob.slice. Pending parts fold into one Blob every 32 MB.
+function BlobSink() {
+  var blob = new Blob([]), parts = [], pend = 0, size = 0;
+  function fold() { if (parts.length) { blob = new Blob([blob].concat(parts)); parts = []; pend = 0; } }
+  return {
+    write: function (data, pos) {
+      var u = new Uint8Array(data);   // copy: the muxer may reuse its buffer
+      if (pos === size) { parts.push(u); pend += u.length; size += u.length; if (pend > 32e6) fold(); return; }
+      fold();
+      var end = pos + u.length;
+      blob = new Blob([blob.slice(0, Math.min(pos, size)), pos > size ? new Uint8Array(pos - size) : new Uint8Array(0), u, blob.slice(Math.min(end, size))]);
+      size = Math.max(size, end);
+    },
+    blob: function (type) { fold(); return new Blob([blob], { type: type }); }
+  };
+}
+function startRecording() {
+  var w = glCanvas.width, h = glCanvas.height;
+  if (window.VideoEncoder && window.VideoFrame && window.Mp4Muxer) {
+    var cfgs = ['avc1.64002a', 'avc1.4d002a', 'avc1.42002a'].map(function (codec) {   // High / Main / Baseline, level 4.2
+      return { codec: codec, width: w, height: h, bitrate: recBitrate(w, h), bitrateMode: 'variable', framerate: REC_FPS, latencyMode: 'quality', avc: { format: 'avc' } };
+    });
+    var pick = function (i) {
+      if (i >= cfgs.length) return Promise.resolve(null);
+      return VideoEncoder.isConfigSupported(cfgs[i]).then(function (r) { return r.supported ? cfgs[i] : pick(i + 1); }, function () { return pick(i + 1); });
+    };
+    return pick(0).then(function (cfg) {
+      if (rec) return;
+      if (!cfg) return startMediaRecorder(w, h);
+      rec = webCodecsRecorder(cfg); syncRec();
+    });
+  }
+  return Promise.resolve().then(function () { if (!rec) startMediaRecorder(w, h); });
+}
+function webCodecsRecorder(cfg) {
+  var sink = BlobSink(), n = 0, failed = null, started = false, drained = false;
+  var muxer = new Mp4Muxer.Muxer({
+    target: new Mp4Muxer.StreamTarget({ onData: sink.write, chunked: true, chunkSize: 4 * 1024 * 1024 }),
+    video: { codec: 'avc', width: cfg.width, height: cfg.height, frameRate: REC_FPS },
+    fastStart: false, firstTimestampBehavior: 'offset'
+  });
+  var enc = new VideoEncoder({
+    output: function (chunk, meta) { started = true; muxer.addVideoChunk(chunk, meta); },
+    error: function (e) { failed = e; REPORT.push('REC encoder ' + e.message); }
+  });
+  enc.configure(cfg);
+  var r = {
+    w: cfg.width, h: cfg.height, saving: false, frames: 0, dropped: 0, codec: cfg.codec,
+    capture: function () {
+      if (r.saving) return;
+      if (failed || glCanvas.width !== r.w || glCanvas.height !== r.h) { r.stop(); return; }
+      var ts = Math.round(n * 1e6 / REC_FPS);
+      // Keep the frame grid even when the encoder falls behind: a skipped frame just holds the previous one longer.
+      // Until the encoder has started and worked off its first backlog the queue may run deeper: a hardware encoder
+      // can take ~0.3 s to produce its first frame.
+      if (started && enc.encodeQueueSize <= 4) drained = true;
+      if (enc.encodeQueueSize > (drained ? 12 : 45)) { n++; r.dropped++; return; }
+      var vf = new VideoFrame(glCanvas, { timestamp: ts, duration: Math.round(1e6 / REC_FPS) });
+      enc.encode(vf, { keyFrame: n % REC_GOP === 0 });
+      vf.close();
+      n++; r.frames++;
+    },
+    stop: function () {
+      if (r.saving) return;
+      r.saving = true; syncRec();
+      var done = function () { rec = null; syncRec(); };
+      (failed ? Promise.reject(failed) : enc.flush()).then(function () {
+        enc.close();
+        if (!r.frames) return done();
+        muxer.finalize();
+        saveBlob(sink.blob('video/mp4'), recFileName('mp4'));
+        done();
+      }).catch(function (e) {
+        REPORT.push('REC ' + (e && e.message || e));
+        try { enc.close(); } catch (x) { /* already closed */ }
+        done(); flash(ui.rec);
+      });
+    }
+  };
+  return r;
+}
+function startMediaRecorder(w, h) {
+  if (!window.MediaRecorder || !glCanvas.captureStream) throw new Error('recording not supported');
+  var types = ['video/mp4;codecs=avc1.64002a', 'video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=h264', 'video/webm;codecs=vp9', 'video/webm'];
+  var type = types.filter(function (t) { return MediaRecorder.isTypeSupported(t); })[0] || '';
+  var stream = glCanvas.captureStream(REC_FPS), parts = [];
+  var mr = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: recBitrate(w, h) });
+  var track = stream.getVideoTracks()[0];
+  mr.ondataavailable = function (e) { if (e.data && e.data.size) parts.push(e.data); };
+  mr.onstop = function () {
+    var t = mr.mimeType || type || 'video/webm';
+    if (parts.length) saveBlob(new Blob(parts, { type: t }), recFileName(/mp4/.test(t) ? 'mp4' : 'webm'));
+    track.stop(); rec = null; syncRec();
+  };
+  mr.start(1000);
+  rec = {
+    w: w, h: h, saving: false, frames: 0, codec: type,
+    capture: function () {
+      if (r2.saving) return;
+      if (glCanvas.width !== w || glCanvas.height !== h) { r2.stop(); return; }
+      r2.frames++;
+    },
+    stop: function () { if (r2.saving) return; r2.saving = true; syncRec(); mr.stop(); }
+  };
+  var r2 = rec;
+  syncRec();
+}
 
 // The visible area in layout pixels: the visual viewport (inside the browser bars on mobile) scaled back to zoom 1.
 function viewSize() {
@@ -1282,6 +1425,56 @@ if (location.hash.indexOf('#shot') === 0) {
     out.slots = buffers.length;
     out.glError = gl.getError(); out.errors = REPORT;
     document.getElementById('__report').textContent = JSON.stringify(out);
+  })();
+} else if (location.hash.indexOf('#rectest') === 0) {
+  // Recording self-test (index.html#rectest): 180 frames (3 s) through the recorder, then the saved file's size, MP4
+  // box layout, sample count, and what a <video> element decodes from it (duration, size, a non-black frame).
+  (function () {
+    var out = { res: CW + 'x' + CH, VideoEncoder: !!window.VideoEncoder, muxer: !!window.Mp4Muxer };
+    var fin = function () { out.errors = REPORT; document.getElementById('__report').textContent = JSON.stringify(out); };
+    var N = 180, i = 0;
+    Object.assign(params, DEFAULTS, { mixX: 0.5, mixY: 0.5 }); syncUI(); clearScreen();
+    var t0;
+    startRecording().then(function () {
+      out.codec = rec && rec.codec; t0 = performance.now();
+      (function step() {
+        // Real-time pacing (one frame per 1/60 s), as the render loop would feed it.
+        while (i < N && performance.now() - t0 >= i * FRAME_MS) { simTime += 1 / 60; renderFeedbackPass(simTime); renderDisplayPass(); rec.capture(); i++; }
+        if (i < N) return setTimeout(step, 2);
+        out.captureMs = +(performance.now() - t0).toFixed(0); out.frames = rec.frames; out.dropped = rec.dropped;
+        rec.stop();
+        (function wait() {
+          if (rec) return setTimeout(wait, 20);
+          var f = window.__lastRecording;
+          if (!f) { out.file = null; return fin(); }
+          out.file = { name: f.name, type: f.type, bytes: f.size };
+          f.blob.arrayBuffer().then(function (ab) {
+            var dv = new DataView(ab), u8 = new Uint8Array(ab), boxes = [], p = 0;
+            while (p + 8 <= ab.byteLength && boxes.length < 20) {
+              var sz = dv.getUint32(p), ty = String.fromCharCode(u8[p + 4], u8[p + 5], u8[p + 6], u8[p + 7]);
+              if (sz === 1) sz = dv.getUint32(p + 8) * 4294967296 + dv.getUint32(p + 12);
+              boxes.push(ty + ':' + sz); if (sz < 8) break; p += sz;
+            }
+            out.boxes = boxes; out.boxesCoverFile = p === ab.byteLength;
+            var find = function (tag) { for (var q = 0; q < u8.length - 4; q++) if (u8[q] === tag.charCodeAt(0) && u8[q + 1] === tag.charCodeAt(1) && u8[q + 2] === tag.charCodeAt(2) && u8[q + 3] === tag.charCodeAt(3)) return q; return -1; };
+            var a = find('avcC'); out.avcC = a > 0 ? 'profile ' + u8[a + 5] + ' level ' + u8[a + 7] : 'missing';
+            var s = find('stsz'); if (s > 0) out.samples = dv.getUint32(s + 12);
+            var v = document.createElement('video'); v.muted = true; v.src = URL.createObjectURL(f.blob);
+            v.onerror = function () { out.decode = 'error ' + (v.error && v.error.code); fin(); };
+            v.onloadedmetadata = function () {
+              out.decode = { duration: +v.duration.toFixed(3), w: v.videoWidth, h: v.videoHeight };
+              v.onseeked = function () {
+                var c = document.createElement('canvas'); c.width = 64; c.height = 64;
+                var x = c.getContext('2d'); x.drawImage(v, 0, 0, 64, 64);
+                var d = x.getImageData(0, 0, 64, 64).data, sum = 0; for (var j = 0; j < d.length; j += 4) sum += d[j] + d[j + 1] + d[j + 2];
+                out.decode.meanAt2s = +(sum / (64 * 64 * 3)).toFixed(1); fin();
+              };
+              v.currentTime = 2;
+            };
+          }).catch(function (e) { out.parseError = String(e); fin(); });
+        })();
+      })();
+    }).catch(function (e) { out.startError = String(e && e.message || e); fin(); });
   })();
 } else {
   requestAnimationFrame(function (now) { lastNow = now; requestAnimationFrame(frame); });

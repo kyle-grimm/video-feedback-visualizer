@@ -2,8 +2,8 @@
 // ===================================================================
 // Design mode (experimentation tooling, loaded after script.js).
 //
-// Opened from the Design key on the screen's top left. Two tracks, each a small genetic algorithm driven by the
-// user's star ratings:
+// Opened from the Design key on the screen's top left (hidden for now: it shows only with #design in the URL).
+// Two tracks, each a small genetic algorithm driven by the user's star ratings:
 //   Layout - a tree of horizontal / vertical splits whose leaves are the panel's blocks (screen, keys, Layers, Mix,
 //            Feedback, Chromakey, Transform, Color), plus screen aspect, knob scale, gaps, padding, corner radius and
 //            per-section column counts. Each block grids its controls inside its box. Separate populations for
@@ -243,12 +243,12 @@
       if (name === 'keys') {
         var g = 8; o.rects = [];
         if (w >= h * 1.4) {
-          var kw = (w - 4 * g) / 5, kh = Math.min(h, 34); if (kw < 46 || kh < 22) fail('keys narrow');
-          for (i = 0; i < 5; i++) o.rects.push([x + i * (kw + g), y + (h - kh) / 2, kw, kh]);
+          var kw = (w - 5 * g) / 6, kh = Math.min(h, 34); if (kw < 46 || kh < 22) fail('keys narrow');
+          for (i = 0; i < 6; i++) o.rects.push([x + i * (kw + g), y + (h - kh) / 2, kw, kh]);
         } else {
-          var kh2 = Math.min((h - 4 * g) / 5, 64), kw2 = Math.min(w, 112), y0 = y + (h - (5 * kh2 + 4 * g)) / 2;
+          var kh2 = Math.min((h - 5 * g) / 6, 64), kw2 = Math.min(w, 112), y0 = y + (h - (6 * kh2 + 5 * g)) / 2;
           if (kh2 < 24 || kw2 < 46) fail('keys short');
-          for (i = 0; i < 5; i++) o.rects.push([x + (w - kw2) / 2, y0 + i * (kh2 + g), kw2, kh2]);
+          for (i = 0; i < 6; i++) o.rects.push([x + (w - kw2) / 2, y0 + i * (kh2 + g), kw2, kh2]);
         }
         o.fs = (o.rects[0][2] < 60) ? 9 : 10;
         return o;
@@ -421,11 +421,12 @@
   }
   layoutEngine = engine;
 
-  // ---------------------------------------------------------------- the Design key on the screen
+  // ---------------------------------------------------------------- the Design key on the screen (only with #design)
+  var SHOW_KEY = /(^#|&)design(&|$)/.test(location.hash);
   window.onPanelBuilt = function () {
     if (!ui.bezel) return;
-    ui.designKey = key(ui.bezel[0] + 18, ui.bezel[1] + 18, 84, 24, 'Design', S.open ? 'on' : 'off', { fs: 9, aria: 'Design mode', onClick: toggle });
-    ui.designKey.b.style.zIndex = '5';
+    if (SHOW_KEY) ui.designKey = key(ui.bezel[0] + 18, ui.bezel[1] + 18, 84, 24, 'Design', S.open ? 'on' : 'off', { fs: 9, aria: 'Design mode', onClick: toggle });
+    if (SHOW_KEY) ui.designKey.b.style.zIndex = '5';
     applyColor(shownColor());
     placeHud();
   };
@@ -597,7 +598,7 @@
   var hp = {};
   location.hash.slice(1).split('&').forEach(function (kv) { var p = kv.split('='); hp[p[0]] = p[1] == null ? true : p[1]; });
   if (hp.dfresh) { S = null; try { localStorage.removeItem(STORE); } catch (e) { /* blocked */ } load(); }
-  if (hp.design) S.open = true;
+  if (hp.design) S.open = true; else if (!SHOW_KEY) S.open = false;   // no key, no HUD: only the adopted look shows
   if (hp.dtrack) S.track = hp.dtrack;
   if (hp.dsel != null) trackState().sel = +hp.dsel;
   if (hp.devolve) {   // rate A..C 5/4/3 and evolve once
