@@ -654,3 +654,17 @@ layouts are unchanged. Section nameplates and the XY pad keep their size (no roo
 To fit: labels sit 3 px under their ring with line-height 1; each right-column section spreads its rows between its
 nameplate and its bottom edge rather than centring them in the ten equal rows; the left knob column moves in 8 px
 for Blend Mode's legend; the header keys are 6 px higher with 6 px gaps; the Layers controls sit at x 92 / 238.
+
+## 15. Fullscreen on phones (2026-10-12)
+
+Full (and double-clicking the screen) used only the Fullscreen API on `#screen`. iPhone Safari doesn't offer it for
+anything but `<video>`, and a browser may also refuse the request; both cases did nothing. Now:
+- The API is used where it's available (desktop, Android, iPad), with `navigationUI: 'hide'`.
+- If it's missing (`fullscreenEnabled` false), the request is rejected, or a prefixed request hasn't taken effect
+  after 1 s, the canvas moves into `#fsview`: a fixed black overlay on `body`, outside the scaled stage (whose
+  transform would trap `position: fixed`), with the canvas letterboxed by `object-fit: contain`. An exit button
+  (top right, inside the safe area) shows for 3 s on entry and after each tap; Escape and Full also exit. Panel
+  rebuilds (a rotation) leave the canvas in the overlay; it returns to the current screen on exit.
+On iPhone the browser's own bars stay visible; only an installed home-screen web app could hide them.
+Tested headless at phone size: missing API, refused request (both go to the overlay), and a real click (true
+fullscreen, no overlay). Not yet tried on a real phone.

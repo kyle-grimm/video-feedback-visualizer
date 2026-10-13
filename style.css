@@ -24,6 +24,14 @@ button:focus-visible { box-shadow: 0 0 0 2px #cfabf6 !important; }
 /* Fullscreen: the browser makes #screen fill the display; keep the canvas (9:16 or 16:9) letterboxed, not stretched. */
 #screen:fullscreen, #screen:-webkit-full-screen { background: #000; border-radius: 0; }
 #screen:fullscreen canvas, #screen:-webkit-full-screen canvas { object-fit: contain; }
+/* Where the Fullscreen API is missing or refused (iPhone Safari): the canvas moves into this overlay over the whole page.
+   Its exit button shows for a few seconds on entry and after each tap. */
+#fsview { position: fixed; inset: 0; z-index: 1000; display: none; background: #000; touch-action: none; }
+#fsview canvas { object-fit: contain; }
+#fsview .fs-exit { position: absolute; z-index: 1; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right));
+  width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); background: rgba(10,10,12,0.6);
+  color: #ebebeb; font: 700 18px/42px "Barlow Semi Condensed", "Segoe UI", sans-serif; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+#fsview.show-exit .fs-exit { opacity: 1; pointer-events: auto; }
 
 .gl-error { position: absolute; inset: 24px; display: flex; align-items: center; justify-content: center; text-align: center;
   color: #f0484a; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.5; }

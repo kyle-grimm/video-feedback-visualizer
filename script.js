@@ -330,7 +330,7 @@ function makeScreen(x, y, w, h) {
   bez.setAttribute('aria-label', 'Video feedback output');
   ui.screen = el('div', 'position:relative;width:100%;height:100%;border-radius:3px;background:#000;overflow:hidden', bez);
   ui.screen.id = 'screen';
-  ui.screen.appendChild(glCanvas);
+  if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
 // Header keys: Pause, Freeze, Reset, Random, Record, Full in the six rects [x, y, w, h].
@@ -342,7 +342,7 @@ function makeKeys(r, fs) {
   ui.rand = K(3, 'Random', null, { aria: 'Randomize', onClick: randomize });
   ui.rec = K(4, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording });
   ui.full = K(5, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
-  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off'); syncRec();
+  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncRec();
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
 function makeCamera(cx, cy) {
@@ -1205,17 +1205,54 @@ function randomize() {
   syncUI();
 }
 
+// Fullscreen. The Fullscreen API where the browser allows it for elements (desktop, Android, iPad). iPhone Safari only
+// allows it for <video>, so there, or if the request is refused, the canvas moves into an overlay covering the page
+// (outside the scaled stage, whose transform would otherwise trap position:fixed). Tapping the overlay shows its exit
+// button for 3 s; Escape and the Full key also exit.
+var fsView = null, pseudoFs = false;
 function currentFullscreenElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
 function toggleFullscreen() {
-  var s = ui.screen;
-  if (!currentFullscreenElement()) {
-    var req = s.requestFullscreen || s.webkitRequestFullscreen;
-    if (req) req.call(s); else flash(ui.full);
-  } else {
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-  }
+  if (pseudoFs) return exitPseudoFullscreen();
+  if (currentFullscreenElement()) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  var s = ui.screen, req = s.requestFullscreen || s.webkitRequestFullscreen;
+  if (!req || document.fullscreenEnabled === false || (document.fullscreenEnabled == null && !document.webkitFullscreenEnabled)) return enterPseudoFullscreen();
+  try {
+    var p = req.call(s, { navigationUI: 'hide' });
+    if (p && p.then) p.catch(enterPseudoFullscreen);
+    else setTimeout(function () { if (!currentFullscreenElement() && !pseudoFs) enterPseudoFullscreen(); }, 1000);   // prefixed: no promise
+  } catch (e) { enterPseudoFullscreen(); }
 }
-function syncFullscreen() { ui.full.set(currentFullscreenElement() === ui.screen ? 'on' : 'off'); fit(); }
+function showFsExit() {
+  fsView.classList.add('show-exit');
+  clearTimeout(fsView.t); fsView.t = setTimeout(function () { fsView.classList.remove('show-exit'); }, 3000);
+}
+function enterPseudoFullscreen() {
+  if (pseudoFs) return;
+  if (!fsView) {
+    fsView = document.createElement('div'); fsView.id = 'fsview';
+    fsView.setAttribute('aria-label', 'Video feedback output, full screen');
+    var x = document.createElement('button');
+    x.type = 'button'; x.className = 'fs-exit'; x.textContent = '✕'; x.setAttribute('aria-label', 'Exit full screen');
+    x.addEventListener('click', function (e) { e.stopPropagation(); exitPseudoFullscreen(); });
+    fsView.appendChild(x);
+    fsView.addEventListener('click', showFsExit);
+    document.body.appendChild(fsView);
+  }
+  pseudoFs = true;
+  fsView.insertBefore(glCanvas, fsView.firstChild);
+  fsView.style.display = 'block';
+  showFsExit();
+  syncFullscreen();
+}
+function exitPseudoFullscreen() {
+  if (!pseudoFs) return;
+  pseudoFs = false;
+  fsView.style.display = 'none';
+  if (ui.screen) ui.screen.appendChild(glCanvas);
+  syncFullscreen();
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pseudoFs) exitPseudoFullscreen(); });
+function syncFullscreen() { if (ui.full) ui.full.set(pseudoFs || currentFullscreenElement() === ui.screen ? 'on' : 'off'); fit(); }
 document.addEventListener('fullscreenchange', syncFullscreen);
 document.addEventListener('webkitfullscreenchange', syncFullscreen);
 
