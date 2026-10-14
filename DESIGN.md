@@ -749,3 +749,18 @@ stayed about 78% through 14 rounds (random is 84%), no value exceeded half a rou
 round. The planted ivory/deep interaction was not found within 14 rounds; interactions need more data. A few weaker
 false findings (≈1–3 per run, each labelled with its rating count) still appear. `#labdemo=N` shows N simulated rounds
 in the HUD without saving.
+
+**Home base favourites (2026-10-14).** Favourites can be read and altered in the project, not only on the device
+that rated them:
+- In the Lab, 5★ Folder → **Send to home base** copies the device's 5★ designs (features, jitter, raw values) plus
+  the current insights as compact JSON (about 1 KB per design) to paste to Claude; without clipboard access it shows
+  the text to copy. **Save folder…** also writes it as `home-base.json` (or downloads it where folders can't be written).
+- In the repo, `favorites/favorites.json` holds the curated designs; `node tools/favorites.mjs import <file>` merges
+  an export and `node tools/favorites.mjs list` prints them readably. An entry can be altered by changing its
+  features (any value of a dimension) or adding `overrides`, exact style values applied last (format in
+  `favorites/README.md`).
+- The site serves that file; the Lab's 5★ Folder lists it under **Home base** (marked "edited" when overridden), to
+  preview and adopt. A design adopted from home base follows later edits to the file (matched by id, refreshed at
+  startup). `#fav=<id>` previews one home-base design without adopting it.
+Tested over HTTP: export → import → alteration (white labels, window lightness 0.30) → `#fav` preview showed both →
+adopted in the Lab → lightness changed to 0.45 in the file → after a reload the adopted look showed 0.45.

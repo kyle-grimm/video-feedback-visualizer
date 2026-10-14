@@ -25,7 +25,9 @@
 // - No early convergence: everything above, plus at least 3 active values per dimension, and every 4th round the best
 //   retired value comes back for a retest.
 // Every 5-star design is kept in the 5★ folder; one can be adopted as the app's look, and the folder can be saved to
-// a folder on disk. Storage: localStorage 'vfv-lab-v1'.
+// a folder on disk. "Send to home base" copies the folder as JSON to paste into the project, where it is curated and
+// altered in favorites/favorites.json; the folder tab lists those home-base designs too. Storage: localStorage
+// 'vfv-lab-v1'.
 //
 // Talks to script.js through: P, ICON_GREEN, TEXT (text measuring for the portrait layout), key, ui, build,
 // scaleStage, drawPad, syncBlendLegend, currentFullscreenElement, UK / UL, and window.onPanelBuilt.
@@ -147,7 +149,15 @@
       skirt: 'knurled', pointer: 'line', pointerColor: 'family', scale: 'ticks', font: 'barlowSC', weight: '700', case: 'upper', tracking: 'normal',
       labelColor: 'dim', nameplate: 'ink' }
   };
+  // A design's style: from its raw parameters (the shipped scheme) or its features + jitter, then any overrides (o):
+  // exact style values set at home base, e.g. { "pLight": 0.3, "hue": [40, 125, 168, 305, 168] }.
   function resolve(sc) {
+    var st = resolveBase(sc);
+    if (sc.o) Object.keys(sc.o).forEach(function (k) { st[k] = clone(sc.o[k]); });
+    ['hue', 'sat'].forEach(function (k) { if (st[k] && st[k].length === 5) st[k].push(st[k][4]); });   // mix mirrors layers
+    return st;
+  }
+  function resolveBase(sc) {
     if (sc.raw) return Object.assign({}, STYLE0, clone(sc.raw));
     var f = sc.f, j = sc.j || { h: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], l: 0, p: 0 }, st = Object.assign({}, STYLE0);
     st.hue = []; st.sat = [];
@@ -650,7 +660,48 @@
     S.folder.push({ id: c.id, sc: sc, round: S.round, letter: String.fromCharCode(65 + S.cands.indexOf(c)), t: Date.now() });
   }
   function select(i) { S.sel = (i + ROUND) % ROUND; selT = Date.now(); save(); apply(); render(); }
-  function adopt(sc) { S.adopted = clone(sc); save(); apply(); flashMsg('Adopted. This is now the app\'s look (Export adopted to build it in).'); }
+  function adopt(sc) { S.adopted = clone(sc); save(); apply(); flashMsg('Adopted. This is now the app\'s look' + (sc.home ? ' (and follows edits made at home base).' : '.')); }
+
+  // ---------------------------------------------------------------- home base favourites
+  // favorites/favorites.json in the repo (deployed with the site): designs sent from a device with "Send to home
+  // base", curated and altered there. Each entry: { id, name, note, from, features, jitter, raw, overrides }.
+  // A design adopted from home base follows later edits to the file (matched by id).
+  var HOME = { designs: [], state: 'loading' }, previewFav = null;
+  function homeScheme(d) {
+    var sc = { id: d.id, f: d.features, home: true };
+    if (d.jitter) sc.j = d.jitter; if (d.raw) sc.raw = d.raw; if (d.overrides) sc.o = d.overrides;
+    return sc;
+  }
+  function loadHome() {
+    return fetch('favorites/favorites.json?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) {
+        HOME.designs = (data.designs || []).filter(function (d) { return d && d.id && d.features; }).map(function (d) {
+          return { id: d.id, name: d.name || d.id, note: d.note || '', from: d.from || '', edited: !!d.overrides || !!d.edited, sc: homeScheme(d) };
+        });
+        HOME.state = 'ok';
+      }).catch(function () { HOME.state = 'unavailable'; });
+  }
+  function homeById(id) { var r = null; HOME.designs.forEach(function (d) { if (d.id === id) r = d; }); return r; }
+  // What "Send to home base" carries: the 5★ folder (features, jitter and raw values; no rendered style, so it stays
+  // small enough to paste) plus the current insights for context.
+  function homeExport() {
+    var I = S.recs.length ? insights() : { items: [] };
+    return { kind: 'vfv-favorites', version: 1, exported: new Date().toISOString(), ratings: S.recs.length, rounds: S.round,
+      designs: S.folder.map(function (it) {
+        var d = { id: it.id, from: 'round ' + it.round + ' design ' + it.letter + ' (5★)', features: it.sc.f };
+        if (it.sc.j) d.jitter = roundJitter(it.sc.j); if (it.sc.raw) d.raw = it.sc.raw; if (it.sc.o) d.overrides = it.sc.o;
+        return d;
+      }), insights: I.items.map(function (x) { return x.kind + ': ' + x.text; }) };
+  }
+  function roundJitter(j) { var r = function (v) { return Math.round(v * 1000) / 1000; }; return { h: j.h.map(r), s: j.s.map(r), l: r(j.l), p: r(j.p) }; }
+  var copyBox = '';
+  function sendHome() {
+    if (!S.folder.length) return flashMsg('The 5★ folder is empty.');
+    var text = JSON.stringify(homeExport());
+    var done = function () { copyBox = ''; flashMsg('Copied ' + S.folder.length + ' favourites. Paste them to Claude at home base.'); };
+    var fail = function () { copyBox = text; render(); var t = hud.querySelector('textarea'); if (t) { t.focus(); t.select(); } flashMsg('Copy the text below and paste it to Claude at home base.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
+  }
 
   // ---------------------------------------------------------------- applying a design to the live panel
   var colorStyle = document.createElement('style');
@@ -686,9 +737,17 @@
       });
     }
   }
+  function selItem() {
+    var k = typeof S.fsel === 'number' ? 'd:' + S.fsel : String(S.fsel || ''), i = +k.slice(2);
+    if (k.indexOf('h:') === 0 && HOME.designs[i]) return { home: true, i: i, item: HOME.designs[i], sc: HOME.designs[i].sc };
+    if (k.indexOf('d:') === 0 && S.folder[i]) return { home: false, i: i, item: S.folder[i], sc: S.folder[i].sc };
+    return null;
+  }
   function shown() {
+    if (!S.open && previewFav) return previewFav.sc;
     if (S.open) {
-      if (S.tab === 'folder' && S.folder[S.fsel]) return S.folder[S.fsel].sc;
+      var fi = selItem();
+      if (S.tab === 'folder' && fi) return fi.sc;
       if (S.tab !== 'folder' && S.cands[S.sel]) return S.cands[S.sel];
     }
     return S.adopted || SHIPPED;
@@ -772,8 +831,8 @@
   function saveFolderToDisk() {
     if (!S.folder.length) return flashMsg('The 5★ folder is empty.');
     if (!window.showDirectoryPicker) {
-      download('five-star-designs.json', JSON.stringify(S.folder.map(designRecord), null, 1));
-      return flashMsg('This browser cannot write folders: downloaded five-star-designs.json instead.');
+      download('home-base.json', JSON.stringify(homeExport(), null, 1));
+      return flashMsg('This browser cannot write folders: downloaded home-base.json instead.');
     }
     window.showDirectoryPicker({ id: 'vfv-5star', mode: 'readwrite', startIn: 'downloads' }).then(function (root) {
       return root.getDirectoryHandle('video-feedback-5-star-designs', { create: true });
@@ -786,7 +845,8 @@
           return new Promise(function (res) { cv.toBlob(function (b) { res(b); }, 'image/png'); });
         }).then(function (b) { return write(base + '.png', b); });
       });
-      return Promise.all(jobs).then(function () { return write('index.json', JSON.stringify(S.folder.map(designRecord), null, 1)); });
+      return Promise.all(jobs).then(function () { return write('index.json', JSON.stringify(S.folder.map(designRecord), null, 1)); })
+        .then(function () { return write('home-base.json', JSON.stringify(homeExport(), null, 1)); });
     }).then(function () { flashMsg('Saved ' + S.folder.length + ' designs to video-feedback-5-star-designs/.'); })
       .catch(function (e) { if (e && e.name !== 'AbortError') flashMsg('Could not save the folder: ' + (e.message || e)); });
   }
@@ -862,7 +922,7 @@
     h += '<div class="msg">' + esc(msgText) + '</div></div>';
     hud.innerHTML = h;
     hud.querySelectorAll('[data-thumb]').forEach(function (el) {
-      var t = el.dataset.thumb.split(':'), sc = t[0] === 'c' ? S.cands[+t[1]] : S.folder[+t[1]].sc;
+      var t = el.dataset.thumb.split(':'), sc = t[0] === 'c' ? S.cands[+t[1]] : t[0] === 'h' ? HOME.designs[+t[1]].sc : S.folder[+t[1]].sc;
       var cv = document.createElement('canvas'); cv.width = 160; cv.height = 100; drawThumb(cv, sc); el.insertBefore(cv, el.firstChild);
     });
   }
@@ -881,15 +941,28 @@
     return h;
   }
   function folderHtml() {
-    var sel = S.folder[S.fsel], h = '';
-    h += '<div class="row"><button data-act="adopt"' + (sel ? '' : ' disabled') + '>Adopt</button><button data-act="fremove"' + (sel ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (S.adopted ? '' : ' disabled') + '>Built-in look</button></div>';
-    h += '<div class="row"><button data-act="savedisk"' + (S.folder.length ? '' : ' disabled') + '>Save folder…</button><button data-act="fjson"' + (S.folder.length ? '' : ' disabled') + '>Download JSON</button><button data-act="exportadopted"' + (S.adopted ? '' : ' disabled') + '>Export adopted</button></div>';
-    h += '<div class="meta">Adopted: ' + (S.adopted ? 'design ' + S.adopted.id : 'built-in look') + (sel ? ' · showing R' + sel.round + sel.letter : '') + '</div>';
-    if (sel) h += '<div class="feat" style="margin-top:4px">' + featSummary(sel.sc.f) + '</div>';
-    if (!S.folder.length) h += '<div class="feat" style="margin-top:6px">Every design you rate 5★ lands here. Pick one to preview it on the panel, then Adopt it as the app\'s look.</div>';
+    var fi = selItem(), sel = fi && fi.item, h = '';
+    h += '<div class="row"><button data-act="adopt"' + (fi ? '' : ' disabled') + '>Adopt</button><button data-act="fremove"' + (fi && !fi.home ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (S.adopted ? '' : ' disabled') + '>Built-in look</button></div>';
+    h += '<div class="row"><button data-act="send" class="on"' + (S.folder.length ? '' : ' disabled') + '>Send to home base</button><button data-act="savedisk"' + (S.folder.length ? '' : ' disabled') + '>Save folder…</button><button data-act="exportadopted"' + (S.adopted ? '' : ' disabled') + '>Export adopted</button></div>';
+    if (copyBox) h += '<textarea readonly style="width:100%;height:70px;box-sizing:border-box;font:10px monospace;background:#0b0b0c;color:#c9c6d0;border:1px solid #3d3b40;border-radius:4px">' + esc(copyBox) + '</textarea>';
+    h += '<div class="meta">Adopted: ' + (S.adopted ? (S.adopted.home && homeById(S.adopted.id) ? homeById(S.adopted.id).name : 'design ' + S.adopted.id) : 'built-in look') + '</div>';
+    if (sel) {
+      h += '<div class="feat" style="margin-top:4px"><b>' + esc(fi.home ? sel.name : 'R' + sel.round + sel.letter) + '</b>' + (fi.home && sel.from ? ' ' + esc(sel.from) : '') +
+        (fi.home && sel.edited ? ' · edited at home base' : '') + (fi.home && sel.note ? '<br>' + esc(sel.note) : '') + '<br>' + featSummary(sel.sc.f) + '</div>';
+    }
+    h += '<div class="meta" style="margin-top:8px">Home base (' + (HOME.state === 'ok' ? HOME.designs.length : HOME.state === 'loading' ? '…' : 'offline') + ')</div>';
+    if (HOME.designs.length) {
+      h += '<div class="grid">';
+      HOME.designs.forEach(function (d, i) {
+        h += '<div class="cand' + (S.fsel === 'h:' + i ? ' sel' : '') + '" data-act="fsel" data-k="h:' + i + '" data-thumb="h:' + i + '"><b>' + esc(d.name.slice(0, d.edited ? 8 : 12)) + '</b>' + (d.edited ? '<em>edited</em>' : '') + '<i>home</i></div>';
+      });
+      h += '</div>';
+    } else h += '<div class="feat">Favourites curated at home base appear here. Send yours with "Send to home base".</div>';
+    h += '<div class="meta" style="margin-top:8px">This device: 5★ (' + S.folder.length + ')</div>';
+    if (!S.folder.length) h += '<div class="feat">Every design you rate 5★ lands here. Pick one to preview it on the panel, then Adopt it as the app\'s look.</div>';
     else {
       h += '<div class="grid">';
-      S.folder.forEach(function (it, i) { h += '<div class="cand' + (i === S.fsel ? ' sel' : '') + '" data-act="fsel" data-i="' + i + '" data-thumb="f:' + i + '"><b>R' + it.round + it.letter + '</b><i>★★★★★</i></div>'; });
+      S.folder.forEach(function (it, i) { h += '<div class="cand' + (S.fsel === 'd:' + i || S.fsel === i ? ' sel' : '') + '" data-act="fsel" data-k="d:' + i + '" data-thumb="f:' + i + '"><b>R' + it.round + it.letter + '</b><i>★★★★★</i></div>'; });
       h += '</div>';
     }
     return h;
@@ -917,15 +990,16 @@
     var a = el.dataset.act, i = +el.dataset.i;
     if (a === 'close') return toggle();
     if (a === 'min') { hud.classList.toggle('min'); return render(); }
-    if (a === 'tab') { S.tab = el.dataset.t; save(); apply(); return render(); }
+    if (a === 'tab') { S.tab = el.dataset.t; copyBox = ''; save(); apply(); return render(); }
     if (a === 'sel') return select(i);
     if (a === 'rate') return rate(S.sel, i);
     if (a === 'prev') return select(S.sel - 1);
     if (a === 'next') return select(S.sel + 1);
     if (a === 'round') { nextRound(); return render(); }
-    if (a === 'fsel') { S.fsel = i; save(); apply(); return render(); }
-    if (a === 'adopt' && S.folder[S.fsel]) return adopt(S.folder[S.fsel].sc);
-    if (a === 'fremove') { S.folder.splice(S.fsel, 1); S.fsel = -1; save(); apply(); return render(); }
+    if (a === 'fsel') { S.fsel = el.dataset.k; save(); apply(); return render(); }
+    if (a === 'adopt') { var fi = selItem(); if (fi) adopt(fi.sc); return render(); }
+    if (a === 'fremove') { var fr = selItem(); if (fr && !fr.home) { S.folder.splice(fr.i, 1); S.fsel = ''; save(); apply(); } return render(); }
+    if (a === 'send') return sendHome();
     if (a === 'builtin') { S.adopted = null; save(); apply(); return flashMsg('Back to the built-in look.'); }
     if (a === 'savedisk') return saveFolderToDisk();
     if (a === 'fjson') return download('five-star-designs.json', JSON.stringify(S.folder.map(designRecord), null, 1));
@@ -972,6 +1046,16 @@
   if (hp.lab && !S.open) { S.open = true; if (!S.round) nextRound(true); }
   if (S.open && !S.round) nextRound(true);
   if (S.open) Object.keys(FONTS).forEach(loadFont);
+  loadHome().then(function () {
+    if (S.adopted && S.adopted.home) {
+      var d = homeById(S.adopted.id);
+      if (d && JSON.stringify(d.sc) !== JSON.stringify(S.adopted)) { S.adopted = clone(d.sc); save(); }
+    }
+    if (hp.fav) previewFav = homeById(decodeURIComponent(hp.fav));
+    apply(); render();
+    var rep = document.getElementById('__report');
+    if (hp.fav && rep) rep.textContent = JSON.stringify({ fav: hp.fav, found: !!previewFav, home: HOME.state, count: HOME.designs.length, errors: REPORT });
+  });
   apply();
   build();   // the panel was built before this module loaded; rebuild to add the Lab key
   scaleStage();
@@ -1006,7 +1090,7 @@
     return out;
   }
   window.__lab = { state: function () { return S; }, rate: rate, nextRound: nextRound, select: select, toggle: toggle, insights: insights, simulate: simulate,
-    styleCss: function (sc) { return styleCss(resolve(sc || SHIPPED)); }, shipped: SHIPPED, derive: function (sc) { return derive(resolve(sc), sc.f); } };
+    styleCss: function (sc) { return styleCss(resolve(sc || SHIPPED)); }, shipped: SHIPPED, home: HOME, homeExport: homeExport, resolve: resolve, derive: function (sc) { return derive(resolve(sc), sc.f); } };
   if (hp.labdemo) {   // index.html#labdemo=N: show N simulated rounds in the HUD (nothing is saved)
     var real = S; simulate(+hp.labdemo || 8, true); simulating = true; S.open = true; S.adopted = real.adopted; apply(); render();
   }
