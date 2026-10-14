@@ -441,7 +441,7 @@ family tints (amber Feedback, olive Chromakey, green Transform, magenta Color, t
 Layers, grey Mix) with a fine grille texture, ink nameplates, family-coloured knob
 pointers, no section outlines, near-black stage, teal accents.
 
-**Design mode (2026-10-12, `design.js`).** Experimentation tooling opened by the
+**Design mode (2026-10-12, `design.js`; replaced by the Style Lab, §17, on 2026-10-13).** Experimentation tooling opened by the
 Design key on the screen's top left (hidden since 2026-10-12; add `#design` to the URL to show it): preference-driven evolution of layouts and
 colour schemes. A layout genome is a split tree whose leaves are the blocks
 (screen, keys, Layers, Mix, Feedback, Chromakey, Transform, Color), plus screen
@@ -685,3 +685,67 @@ sits 14 px inside the top, right and bottom edges of Layers (so it is now about 
 spread evenly to its left.
 Nameplates are 2x in portrait (20 px). To fit the 146 px Transform window they sit 8 px in (12 at 1x), with 8 px
 side padding and 0.1em letter-spacing (0.16em at 1x). Landscape and design mode are unchanged.
+
+## 17. Style Lab (replaces design mode, 2026-10-13)
+
+`lab.js` replaces `design.js`. Open it with the **Lab** key on the screen's top-left corner (or `#lab` in the URL). It
+experiments only with the look, never the layout.
+
+**Design space.** A design is one categorical value in each of 22 dimensions:
+- Colour: five window colours (Feedback, Chromakey, Transform, Color, Layers; 11 hues incl. neutral, 5 more in reserve),
+  window saturation, window lightness (deep to pale), background, glass accent, window outline.
+- Texture: type (6, plus 6 in reserve: grain, linen, scanlines, dots, weave, stripes), strength (subtle to strong), sheen.
+- Knobs: cap (6 + brass, red, glass), skirt (4 + fluted, metal), pointer shape (4 + triangle, notch), pointer colour,
+  scale (ticks, faint, none, arc, family-colour arc + glowing arc).
+- Font: family (7 condensed Google fonts + 6 in reserve; all condensed so the portrait spacing holds), label weight,
+  case, letter spacing.
+- Text colour: label colour (7 options), nameplate style (5 + 2).
+Small random jitter (hue, saturation, lightness) varies designs within a value without being a feature. The renderer
+is design mode's colour CSS extended with the new dimensions; their defaults add no CSS, so the built-in look
+(the scheme shipped 2026-10-12) renders byte-for-byte as before. Changing font, weight, case or spacing rebuilds the
+panel once the font has loaded, because the portrait layout spaces controls by measured label widths (`TEXT` in
+script.js tells `textW` the current text style).
+
+**Datapoints.** Each rating stores: round, design id, stars, time spent viewing before rating, any re-rating, all 22
+features (texture strength recorded as n/a for flat), and derived measures computed from the rendered colours:
+label/window contrast (WCAG ratio, worst window), nameplate contrast, pointer/cap contrast, texture amount, window
+lightness, number of distinct window colours, colour harmony (monochrome, analogous, complementary, triadic, rainbow,
+mixed), temperature, and text polarity. Exports: CSV (one row per rating) and full JSON.
+
+**Insights.** A ridge regression of stars on every feature value, the derived categories and the standardised
+measures (λ = 3) gives each value's effect *against the alternatives with everything else held equal*, so values that
+merely ride along in liked designs get little credit. Reported:
+- preferences and dislikes: effect of at least 0.4★ and at least 3 standard errors (about 150 values are tested), with
+  5+ ratings;
+- threshold rules on the measures (e.g. "Text must contrast with its window background: keep the label/window
+  contrast at or above 4.5:1"): the best split, kept only when 80%+ of 4–5★ designs sit on the good side, the split
+  moves the average by 0.8★+ and the model agrees on the direction;
+- interactions: pairs whose designs score at least 0.5★ above or below what the model predicts from the two
+  separately, with 8+ designs and a t-score of 3.5;
+- drivers: each feature's share of the variance the model explains; and a one-line taste profile.
+Insights appear after 20 ratings.
+
+**Rounds of 16.** Round 1: the current look plus 15 designs with every dimension's values dealt out evenly. After
+that, for each design and each dimension: with probability 0.5 the value is drawn from the features of designs
+rated above 3★ (weight = stars − 3, ×0.8 per round of age), otherwise by Thompson sampling over the active values
+(untested values have wide posteriors, so they get tried). 4 of the 16 are explorers that use the least-tested values.
+Variability constraints: each design differs from every liked design in ≥45% of features and from the other designs
+in the round in ≥40% (relaxed slowly if impossible); no value fills more than its share of a round
+(max(3, ⌈16/values⌉ + 2)); no design is ever repeated. Between rounds (12+ of 16 rated): up to 5 values are retired
+if they have 4+ ratings, average ≥0.4★ below the mean, a model effect of −0.4★ or worse, and under 20% of their
+ratings above 3★. Each retirement brings in a reserve value, at least 2 new values enter per round while reserves
+last, each new value appears in at least 2 designs of its first round, every dimension keeps at least 3 values where
+it has them, and every 4th round the best retired value returns for a retest.
+
+**5★ folder.** Every 5★ design is kept. Selecting one previews it on the panel; Adopt makes it the app's look
+(persisted; applied at startup without opening the Lab). "Save folder…" writes `video-feedback-5-star-designs/`
+(one JSON + PNG per design, plus index.json) into a folder you choose (Chrome/Edge); other browsers download one
+JSON. "Export adopted" downloads the adopted design for building into the app.
+
+**Self-test** (`#labsim=N`): a simulated rater who likes green Chromakey windows, labels with ≥4.5:1 contrast, mild
+textures, and ivory caps only on deep windows. Six runs: the contrast rule (found at 4.5–4.8:1) and the mild-texture
+preference appeared in all six; green Chromakey in all three 14-round runs, one of three 8-round runs. Diversity
+stayed about 78% through 14 rounds (random is 84%), no value exceeded half a round, and 2+ new values entered every
+round. The planted ivory/deep interaction was not found within 14 rounds; interactions need more data. A few weaker
+false findings (≈1–3 per run, each labelled with its rating count) still appear. `#labdemo=N` shows N simulated rounds
+in the HUD without saving.

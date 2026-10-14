@@ -90,7 +90,7 @@ function dragValue(target, ctl, range) {
 
 // Outlined section with its nameplate tab on the top border. fam names the parameter family, whose surface texture
 // (a .fam-<fam> fill under the outline) and nameplate colour come from the Anodized theme in style.css.
-var SEC_R = 3; // section corner radius (design mode can change it)
+var SEC_R = 3; // section corner radius (a layout engine can change it)
 // Control and label scale for the makers below (labels include the section nameplates): 1 by default; the portrait
 // built-in layout sets 1.2 and 2.
 var UK = 1, UL = 1;
@@ -276,7 +276,7 @@ function hslToRgb(h, s, l) {
 // 3. Panel layout.
 // Makers place one part of the panel at stage coordinates: makeScreen, makeKeys, makeItem (a knob, the Camera
 // cluster or the Chromakey On key, from CONTROLS), makePad and makeSwatch. SECTIONS lists each parameter family's
-// controls. The built-in layouts (buildDefault) and design mode (design.js, through layoutEngine) both use them.
+// controls. The built-in layouts (buildDefault) use them, as can a layout engine (layoutEngine).
 //
 // Built-in layouts, chosen by the window's shape (or #portrait / #landscape in the URL):
 // Portrait, 900 x 1336: the 9:16 screen top left with the header keys under it, the Layers knobs and XY Mix pad below
@@ -346,27 +346,27 @@ function makeKeys(r, fs) {
   ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncRec();
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
-function makeCamera(cx, cy) {
+function makeCamera(cx, cy, fam) {
   var k = UK, bw = 104 * k, bx = cx - bw / 2;
   ui.camOn = key(bx, cy - 34 * k, bw, 26 * k, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
   ui.camFacing = ['user', 'environment'].map(function (f, i) {
     return key(bx + i * (bw / 2 + 2), cy - 2 * k, bw / 2 - 2, 22 * k, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
   });
-  cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()).className = 'knob-label';
+  var lab = cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
   syncCam();
 }
 // Chromakey On key centred on (cx, cy), label where a knob of size ks would put it.
-function makeChromaOn(cx, cy, ks) {
+function makeChromaOn(cx, cy, ks, fam) {
   ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  cl(cx, cy + ks / 2 + (UL > 1 ? 13 : 15), 120 * UL, 'Enable', LABEL()).className = 'knob-label';
+  var lab = cl(cx, cy + ks / 2 + (UL > 1 ? 13 : 15), 120 * UL, 'Enable', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
   syncers.push(syncKeyOn);
   syncKeyOn();
 }
 // One control by id, its knob ring (or key cluster) centred on (cx, cy). o: fam, legend (room for Blend Mode's legend).
 function makeItem(id, cx, cy, size, o) {
   o = o || {};
-  if (id === 'camera') return makeCamera(cx, cy);
-  if (id === 'keyOn') return makeChromaOn(cx, cy, size);
+  if (id === 'camera') return makeCamera(cx, cy, o.fam);
+  if (id === 'keyOn') return makeChromaOn(cx, cy, size, o.fam);
   var c = CONTROLS[id], opts = Object.assign({ fam: o.fam }, c[1] || {});
   var k = knob(cx, cy, size, c[0], id, opts);
   if (id === 'blendMode') { ui.blend = k; if (o.legend !== false) blendLegend(cx, cy, k.R); }
@@ -378,7 +378,8 @@ function makeSwatch(x, y) {
   syncKeySwatch();
 }
 
-// Layout engine hook: design.js sets { key(): string, build(): void } to replace the built-in layouts. key() changes
+// Layout engine hook (design mode used it; unused since the Style Lab replaced it, 2026-10-13): an object
+// { key(): string, build(): void } replaces the built-in layouts. key() changes
 // whenever the layout should be rebuilt (window shape, candidate); build() sets SW / SH / CW / CH and places the parts.
 var layoutEngine = null, builtKey = '';
 function layoutKey() { return layoutEngine ? layoutEngine.key() : (wantLand() ? 'land' : 'port'); }
@@ -441,11 +442,15 @@ function buildPortraitPanel() {
     document.fonts.ready.then(function () { if (!currentFullscreenElement()) { build(); scaleStage(); } });
   }
 }
+// Text measuring for the spacing. The Style Lab (lab.js) sets TEXT to the label font, weight (0 = as asked),
+// letter-spacing (0 = as asked) and case of the design on show, and rebuilds the panel when they change.
+var TEXT = { font: '"Barlow Semi Condensed", "Segoe UI", sans-serif', weight: 0, ls: 0, upper: true };
 var measureCtx = null;
 function textW(t, px, weight, ls) {
   measureCtx = measureCtx || document.createElement('canvas').getContext('2d');
-  measureCtx.font = weight + ' ' + px + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
-  return measureCtx.measureText(String(t).toUpperCase()).width + String(t).length * ls * px;
+  measureCtx.font = (TEXT.weight || weight) + ' ' + px + 'px ' + TEXT.font;
+  var str = TEXT.upper ? String(t).toUpperCase() : String(t);
+  return measureCtx.measureText(str).width + str.length * (TEXT.ls || ls) * px;
 }
 // A control's extent around its centre: width, and height above (top) and below (bot), label included.
 function itemExt(id, ks) {
