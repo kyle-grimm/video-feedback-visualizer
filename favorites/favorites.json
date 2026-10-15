@@ -1,5 +1,55 @@
 {
  "version": 1,
- "updated": "2026-10-14",
- "designs": []
+ "updated": "2026-10-15",
+ "designs": [
+  {
+   "id": "zjvns23",
+   "name": "Favourite 1",
+   "from": "round 3 design G (5★)",
+   "features": {
+    "hue.feedback": "violet",
+    "hue.chroma": "red",
+    "hue.transform": "yellow",
+    "hue.color": "green",
+    "hue.layers": "teal",
+    "panel.sat": "vivid",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "magenta",
+    "outline": "gray",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "500",
+    "case": "title",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "outline"
+   },
+   "jitter": {
+    "h": [
+     4.153,
+     13.805,
+     20.73,
+     -5.788,
+     1.142
+    ],
+    "s": [
+     -0.008,
+     0.088,
+     0.091,
+     0.054,
+     -0.033
+    ],
+    "l": 0.015,
+    "p": 0.005
+   }
+  }
+ ]
 }
