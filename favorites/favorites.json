@@ -50,6 +50,306 @@
     "l": 0.015,
     "p": 0.005
    }
+  },
+  {
+   "id": "zk79i92",
+   "name": "Favourite 2",
+   "from": "round 11 design D (5★)",
+   "features": {
+    "hue.feedback": "teal",
+    "hue.chroma": "teal",
+    "hue.transform": "neutral",
+    "hue.color": "red",
+    "hue.layers": "orange",
+    "panel.sat": "vivid",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "red",
+    "outline": "none",
+    "texture": "flat",
+    "texStrength": "medium",
+    "sheen": "matte",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "wedge",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "barlowC",
+    "weight": "500",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "outline"
+   },
+   "jitter": {
+    "h": [
+     -6.483,
+     -9.041,
+     -2.554,
+     -7.367,
+     0.837
+    ],
+    "s": [
+     -0.1,
+     -0.071,
+     0.068,
+     -0.085,
+     -0.052
+    ],
+    "l": 0.005,
+    "p": -0.005
+   }
+  },
+  {
+   "id": "y1oc9m7",
+   "name": "Favourite 3",
+   "from": "round 14 design C (5★)",
+   "features": {
+    "hue.feedback": "yellow",
+    "hue.chroma": "magenta",
+    "hue.transform": "cyan",
+    "hue.color": "red",
+    "hue.layers": "neutral",
+    "panel.sat": "vivid",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "red",
+    "outline": "none",
+    "texture": "brushed",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "black",
+    "scale": "ticks",
+    "font": "teko",
+    "weight": "700",
+    "case": "title",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "panel"
+   },
+   "jitter": {
+    "h": [
+     2.656,
+     6.977,
+     -3.95,
+     0.914,
+     2.631
+    ],
+    "s": [
+     -0.076,
+     -0.004,
+     0.093,
+     0.012,
+     0.032
+    ],
+    "l": 0.018,
+    "p": 0.016
+   }
+  },
+  {
+   "id": "te4e357",
+   "name": "Favourite 4",
+   "from": "round 16 design A (5★)",
+   "features": {
+    "hue.feedback": "amber",
+    "hue.chroma": "magenta",
+    "hue.transform": "mint",
+    "hue.color": "neutral",
+    "hue.layers": "orange",
+    "panel.sat": "vivid",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "magenta",
+    "outline": "light",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "smooth",
+    "pointer": "wedge",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "barlowC",
+    "weight": "700",
+    "case": "title",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "black"
+   },
+   "jitter": {
+    "h": [
+     5.637,
+     -3.29,
+     2.593,
+     -0.429,
+     2.621
+    ],
+    "s": [
+     -0.071,
+     -0.029,
+     0.077,
+     0.054,
+     0.059
+    ],
+    "l": 0,
+    "p": 0.024
+   }
+  },
+  {
+   "id": "oivwcme",
+   "name": "Favourite 5",
+   "from": "round 16 design C (5★)",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "teal",
+    "hue.transform": "neutral",
+    "hue.color": "blue",
+    "hue.layers": "orange",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "slate",
+    "accent": "red",
+    "outline": "gray",
+    "texture": "brushed",
+    "texStrength": "medium",
+    "sheen": "soft",
+    "cap": "black",
+    "skirt": "knurled",
+    "pointer": "wedge",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "sairaC",
+    "weight": "700",
+    "case": "title",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "panel"
+   },
+   "jitter": {
+    "h": [
+     -0.705,
+     -2.981,
+     8.072,
+     -0.351,
+     -11.623
+    ],
+    "s": [
+     -0.005,
+     -0.089,
+     -0.008,
+     -0.088,
+     0.042
+    ],
+    "l": -0.008,
+    "p": 0.003
+   }
+  },
+  {
+   "id": "vfabria",
+   "name": "Favourite 6",
+   "from": "round 17 design A (5★)",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "amber",
+    "hue.transform": "mint",
+    "hue.color": "teal",
+    "hue.layers": "neutral",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "slate",
+    "accent": "cyan",
+    "outline": "none",
+    "texture": "scanlines",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "wedge",
+    "pointerColor": "black",
+    "scale": "ticks",
+    "font": "barlowC",
+    "weight": "700",
+    "case": "title",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "black"
+   },
+   "jitter": {
+    "h": [
+     1.354,
+     -1.581,
+     -11.556,
+     4.635,
+     -6.149
+    ],
+    "s": [
+     0.091,
+     0.094,
+     0.031,
+     -0.064,
+     0.01
+    ],
+    "l": -0.016,
+    "p": 0.022
+   }
+  },
+  {
+   "id": "plm6rmy",
+   "name": "Favourite 7",
+   "from": "round 20 design A (5★)",
+   "features": {
+    "hue.feedback": "yellow",
+    "hue.chroma": "amber",
+    "hue.transform": "mint",
+    "hue.color": "blue",
+    "hue.layers": "orange",
+    "panel.sat": "soft",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "cyan",
+    "outline": "light",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "amber",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "700",
+    "case": "title",
+    "tracking": "tight",
+    "labelColor": "familyDark",
+    "nameplate": "underline"
+   },
+   "jitter": {
+    "h": [
+     8.832,
+     0.727,
+     9.47,
+     -4.43,
+     6.673
+    ],
+    "s": [
+     -0.088,
+     0.034,
+     0.022,
+     0.077,
+     0.085
+    ],
+    "l": 0.007,
+    "p": -0.022
+   }
   }
+ ],
+ "insights": [
+  "rule: Lighter windows are preferred: keep the window lightness at or above 64% lightness. 96% of your 4–5★ designs do; designs on the other side average 1.2★ (n=195) vs 2.3★ (n=116).",
+  "drivers: What drives your ratings most: window lightness (8%), chromakey window colour (7%), feedback window colour (6%), sheen (6%), layers window colour (6%).",
+  "avoid: Feedback window colour: magenta disliked: −0.6★ against the alternatives, everything else equal (1.2★ average over 14 ratings).",
+  "clash: Clash: color window colour red with pointer colour red: −0.5★ beyond their separate effects (1.8★ average, n=8)."
  ]
 }
