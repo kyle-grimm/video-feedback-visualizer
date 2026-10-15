@@ -18,7 +18,7 @@ current insights) as JSON to paste into a chat or a file. **Save folder…** wri
   "id": "5k3x6wn",                 // stable; the Lab matches adoption by it
   "name": "Amber night",           // shown in the Lab
   "note": "why it was kept",       // optional
-  "from": "round 3 design F (5★)",
+  "from": "round 3 design F (5★)",   // or "tuned from Favourite 4" for a design saved in the Lab's tuner
   "features": { "hue.chroma": "green", "texture": "grille", "labelColor": "bright", ... },
   "jitter": { "h": [..5], "s": [..5], "l": 0, "p": 0 },   // small per-design variation; leave as is
   "raw": { ... },                  // only for the original built-in scheme (exact parameters)

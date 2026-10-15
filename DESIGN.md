@@ -764,3 +764,22 @@ that rated them:
   startup). `#fav=<id>` previews one home-base design without adopting it.
 Tested over HTTP: export → import → alteration (white labels, window lightness 0.30) → `#fav` preview showed both →
 adopted in the Lab → lightness changed to 0.45 in the file → after a reload the adopted look showed 0.45.
+
+## 18. Favourite tuner (2026-10-14)
+A Lab module for fine-tuning favourites. In the 5★ Folder every favourite tile (home base and this device) has
+**Tune ▸** (also the **Tune…** button for the selected one). It opens a window in the Lab window's place with:
+- **Element rows**, grouped as Colour scheme (each window's colour, window saturation, background, glass accent,
+  window outline), Texture (texture, strength, sheen), Knobs (cap, skirt, pointer, pointer colour), Text font (font,
+  weight, case, letter spacing) and Text colour (label colour, nameplate). Each has ◀ ▶ buttons that cycle it through
+  the values chosen in any favourite, never values outside them, shown with how many favourites use each (e.g. 4/7).
+  Elements every favourite agrees on are listed under the group as fixed. Changed elements are outlined.
+- **Group rows**: ◀ ▶ on a group's top row swap in another favourite's whole set for that group (the colour scheme
+  brings its exact colour variation and any home-base overrides with it); the row names the favourite it matches, or
+  "custom mix".
+- **Adopt** (the app's look), **Save as favourite** (a new entry in this device's 5★ folder named "Favourite 4 tuned";
+  "Send to home base" carries its name and origin), **Shuffle** (random pick among the favourites' values for every
+  element), **Reset**, **Back**.
+The panel previews every change live. Changing an element drops any home-base override that controls it. The work in
+progress is kept in the Lab state, so it survives a reload. `#tune=h:3` opens the tuner on home-base favourite 4.
+Tested in headless Chrome at 900 and 500 px wide with the seven home-base favourites: group and element cycling,
+live CSS change, font change, save (name, origin, export), back, shuffle + adopt, reload.

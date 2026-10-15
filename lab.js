@@ -26,8 +26,9 @@
 //   retired value comes back for a retest.
 // Every 5-star design is kept in the 5★ folder; one can be adopted as the app's look, and the folder can be saved to
 // a folder on disk. "Send to home base" copies the folder as JSON to paste into the project, where it is curated and
-// altered in favorites/favorites.json; the folder tab lists those home-base designs too. Storage: localStorage
-// 'vfv-lab-v1'.
+// altered in favorites/favorites.json; the folder tab lists those home-base designs too. Any favourite can be opened in
+// the tuner, which cycles each element through the values the favourites chose (see "tuner" below). Storage:
+// localStorage 'vfv-lab-v1'.
 //
 // Talks to script.js through: P, ICON_GREEN, TEXT (text measuring for the portrait layout), key, ui, build,
 // scaleStage, drawPad, syncBlendLegend, currentFullscreenElement, UK / UL, and window.onPanelBuilt.
@@ -688,7 +689,8 @@
     var I = S.recs.length ? insights() : { items: [] };
     return { kind: 'vfv-favorites', version: 1, exported: new Date().toISOString(), ratings: S.recs.length, rounds: S.round,
       designs: S.folder.map(function (it) {
-        var d = { id: it.id, from: 'round ' + it.round + ' design ' + it.letter + ' (5★)', features: it.sc.f };
+        var d = { id: it.id, from: it.from || 'round ' + it.round + ' design ' + it.letter + ' (5★)', features: it.sc.f };
+        if (it.name) d.name = it.name;
         if (it.sc.j) d.jitter = roundJitter(it.sc.j); if (it.sc.raw) d.raw = it.sc.raw; if (it.sc.o) d.overrides = it.sc.o;
         return d;
       }), insights: I.items.map(function (x) { return x.kind + ': ' + x.text; }) };
@@ -744,6 +746,7 @@
     return null;
   }
   function shown() {
+    if (S.open && S.tune) return S.tune.sc;
     if (!S.open && previewFav) return previewFav.sc;
     if (S.open) {
       var fi = selItem();
@@ -860,11 +863,134 @@
     download('style-lab-ratings.csv', [head].concat(rows).map(function (row) { return row.map(function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(','); }).join('\n'), 'text/csv');
   }
 
+  // ---------------------------------------------------------------- tuner: fine-tune a favourite
+  // Opened from any favourite in the 5★ Folder (home base or this device), in a window that takes the Lab window's
+  // place. Each element (every window colour, saturation, lightness, background, accent, outline, texture, knob part,
+  // font setting and text colour) has ◀ ▶ buttons that cycle it through the values chosen in any favourite; each group
+  // (colour scheme, texture, knobs, text font, text colour) cycles as a whole through the favourites' combinations.
+  // Elements every favourite agrees on are listed as fixed. The panel previews the result live; it can be adopted, or
+  // saved as a new favourite on this device ("Send to home base" carries it with its name and origin). The work in
+  // progress is kept in S.tune, so it survives a reload.
+  var TGROUPS = [['Colour', 'Colour scheme'], ['Texture', 'Texture'], ['Knobs', 'Knobs'], ['Font', 'Text font'], ['Text colour', 'Text colour']];
+  // Override keys (exact values set at home base) that each element controls: changing the element drops them.
+  var OKEYS = { 'panel.sat': ['pSat'], 'panel.light': ['pLight'], stage: ['sHue', 'sSat', 'sLight'], accent: ['accentHue', 'glassHue', 'accSat', 'glassSat'],
+    outline: ['outline'], texture: ['texture', 'texStr'], texStrength: ['texStr'], sheen: ['sheen'], cap: ['cap'], skirt: ['skirt'], pointer: ['pointer'],
+    pointerColor: ['ptr'], scale: ['scale'], font: ['font'], weight: ['weight'], case: ['textCase'], tracking: ['tracking'], labelColor: ['label'], nameplate: ['tab'] };
+  FAM5.forEach(function (f) { OKEYS['hue.' + f] = ['hue', 'sat']; });
+  var zeroJ = function () { return { h: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], l: 0, p: 0 }; };
+  var groupDims = function (g) { return DIMS.filter(function (d) { return d.group === g; }); };
+  function favPool() {   // every favourite: home base first, then this device's 5★ folder (ids deduplicated)
+    var out = [], ids = {};
+    HOME.designs.forEach(function (d) { ids[d.id] = 1; out.push({ name: d.name, sc: d.sc }); });
+    S.folder.forEach(function (it) { if (!ids[it.id]) { ids[it.id] = 1; out.push({ name: itemName(it), sc: it.sc }); } });
+    return out;
+  }
+  function tuneOptions(k) {   // the values the favourites chose, in the dimension's own order
+    var d = DIM[k], order = d.init.concat(d.reserve), n = {};
+    favPool().forEach(function (fv) { var v = fv.sc.f[k]; if (v != null) n[v] = (n[v] || 0) + 1; });
+    var vals = order.filter(function (v) { return n[v]; }).concat(Object.keys(n).filter(function (v) { return order.indexOf(v) < 0; }));
+    return { vals: vals, n: n };
+  }
+  function groupBundles(g) {   // each favourite's combination for a group, duplicates merged
+    var out = [], dims = groupDims(g);
+    favPool().forEach(function (fv) {
+      var key = dims.map(function (d) { return fv.sc.f[d.k]; }).join('|'), b = null;
+      out.forEach(function (x) { if (x.key === key) b = x; });
+      if (b) b.names.push(fv.name); else out.push({ key: key, names: [fv.name], sc: fv.sc });
+    });
+    return out;
+  }
+  function bundleIndex(g, bs) { var key = groupDims(g).map(function (d) { return S.tune.sc.f[d.k]; }).join('|'), r = -1; bs.forEach(function (b, i) { if (b.key === key) r = i; }); return r; }
+  function openTune() {
+    var fi = selItem(); if (!fi) return;
+    var base = clone(fi.sc); base.id = 'tune'; delete base.home;
+    S.tune = { from: fi.home ? fi.item.name : itemName(fi.item), base: base, sc: clone(base) };
+    save(); apply(); render();
+  }
+  function tuneSet(k, v) {
+    var sc = S.tune.sc;
+    if (sc.raw) { delete sc.raw; sc.j = sc.j || zeroJ(); }   // the built-in look's exact values give way to its features
+    sc.f[k] = v;
+    if (sc.o) { OKEYS[k].forEach(function (o) { delete sc.o[o]; }); if (!Object.keys(sc.o).length) delete sc.o; }
+  }
+  function tuneCycle(k, dir) {
+    var opts = tuneOptions(k).vals, i = opts.indexOf(S.tune.sc.f[k]), n = opts.length;
+    if (n < 2) return;
+    tuneSet(k, opts[i < 0 ? (dir > 0 ? 0 : n - 1) : (i + dir + n) % n]);
+    save(); apply(); render();
+  }
+  function tuneGroup(g, dir) {   // the next favourite's whole combination for the group, with its exact colour variation and overrides
+    var bs = groupBundles(g), i = bundleIndex(g, bs), n = bs.length;
+    if (n < 2) return;
+    var src = bs[i < 0 ? (dir > 0 ? 0 : n - 1) : (i + dir + n) % n].sc, sc = S.tune.sc;
+    groupDims(g).forEach(function (d) { tuneSet(d.k, src.f[d.k]); });
+    if (g === 'Colour') sc.j = clone(src.j || zeroJ());
+    if (src.o) groupDims(g).forEach(function (d) { OKEYS[d.k].forEach(function (o) { if (src.o[o] != null) { sc.o = sc.o || {}; sc.o[o] = clone(src.o[o]); } }); });
+    save(); apply(); render();
+  }
+  function tuneShuffle() {
+    DIMS.forEach(function (d) { var opts = tuneOptions(d.k).vals; if (opts.length > 1) tuneSet(d.k, pick(opts)); });
+    save(); apply(); render();
+  }
+  var tuneChanged = function () { return JSON.stringify(S.tune.sc) !== JSON.stringify(S.tune.base); };
+  function tuneName() {   // "Favourite 4 tuned", then "Favourite 4 tuned 2", ...
+    var stem = S.tune.from.replace(/ tuned( \d+)?$/, '') + ' tuned', name = stem, k = 1;
+    var taken = function (nm) { return S.folder.some(function (it) { return it.name === nm; }) || HOME.designs.some(function (d) { return d.name === nm; }); };
+    while (taken(name)) name = stem + ' ' + (++k);
+    return name;
+  }
+  function tuneSave() {
+    var id = uid(), sc = clone(S.tune.sc), name = tuneName(); sc.id = id;
+    S.folder.push({ id: id, sc: sc, round: S.round, letter: 'T', name: name, from: 'tuned from ' + S.tune.from, t: Date.now() });
+    S.tune.base = clone(S.tune.sc); S.tune.from = name;
+    save(); flashMsg('Saved as "' + name + '" in this device\'s 5★ folder. Send to home base to bring it here.');
+  }
+  function tuneAdopt() {
+    var sc = clone(S.tune.sc); sc.id = uid(); sc.name = S.tune.from + (tuneChanged() ? ' (tuned)' : '');
+    adopt(sc);
+  }
+  function tuneHtml() {
+    var T = S.tune, f = T.sc.f, bf = T.base.f, total = favPool().length;
+    var h = '<div class="hd"><span>Tune · ' + esc(T.from) + '</span><button class="x" data-act="tclose" title="Back to the Lab">×</button></div><div class="bd">';
+    h += '<div class="row"><button data-act="tadopt" class="on">Adopt</button><button data-act="tsave"' + (tuneChanged() ? '' : ' disabled') + '>Save as favourite</button></div>';
+    h += '<div class="row"><button data-act="tshuffle">Shuffle</button><button data-act="treset"' + (tuneChanged() ? '' : ' disabled') + '>Reset</button><button data-act="tclose">Back</button></div>';
+    h += '<div class="hint" style="margin-top:2px">◀ ▶ cycle each element through the values your ' + total + ' favourites use (the count shows how many use it). The top row of a group swaps in another favourite\'s whole set.</div>';
+    TGROUPS.forEach(function (g) {
+      var bs = groupBundles(g[0]), bi = bundleIndex(g[0], bs), fixed = [];
+      var bname = bi < 0 ? 'custom mix' : bs[bi].names[0] + (bs[bi].names.length > 1 ? ' +' + (bs[bi].names.length - 1) : '');
+      h += '<div class="tr tg"><span>' + g[1] + '</span><button data-act="tgrp" data-g="' + g[0] + '" data-d="-1"' + (bs.length > 1 ? '' : ' disabled') + '>◀</button><b>' + esc(bname) +
+        '</b><button data-act="tgrp" data-g="' + g[0] + '" data-d="1"' + (bs.length > 1 ? '' : ' disabled') + '>▶</button></div>';
+      groupDims(g[0]).forEach(function (d) {
+        var o = tuneOptions(d.k), v = f[d.k], na = d.k === 'texStrength' && f.texture === 'flat';
+        if (o.vals.length < 2) { if (!na) fixed.push(featPhrase(d.k, v)); return; }
+        var sw = d.k.indexOf('hue.') === 0 ? '<span class="sw" style="background:' + (HUES[v] == null ? '#8f8d92' : hsl(HUES[v], 0.6, 0.62)) + '"></span>' : '';
+        var face = d.k === 'font' && FONTS[v] ? ' style="font-family:' + esc(fontCss(v)) + '"' : '';
+        h += '<div class="tr"><span>' + esc(d.k.indexOf('hue.') === 0 ? d.label.split(' ')[0] : d.label) + '</span>' +
+          '<button data-act="tcyc" data-k="' + d.k + '" data-d="-1"' + (na ? ' disabled' : '') + '>◀</button>' +
+          '<b class="' + (na ? 'na' : v !== bf[d.k] ? 'chg' : '') + '"' + face + '>' + (na ? 'n/a (flat)' : sw + esc(valueName(d.k, v)) + '<i>' + (o.n[v] || 0) + '/' + total + '</i>') + '</b>' +
+          '<button data-act="tcyc" data-k="' + d.k + '" data-d="1"' + (na ? ' disabled' : '') + '>▶</button></div>';
+      });
+      if (fixed.length) h += '<div class="tfix">Every favourite: ' + esc(fixed.join(' · ')) + '</div>';
+    });
+    return h + '<div class="msg">' + esc(msgText) + '</div></div>';
+  }
+  function tuneClick(e) {
+    var el = e.target.closest('[data-act]'); if (!el || el.disabled || !S.tune) return;
+    var a = el.dataset.act, d = +el.dataset.d;
+    if (a === 'tclose') { S.tune = null; save(); apply(); return render(); }
+    if (a === 'tcyc') return tuneCycle(el.dataset.k, d);
+    if (a === 'tgrp') return tuneGroup(el.dataset.g, d);
+    if (a === 'tshuffle') return tuneShuffle();
+    if (a === 'treset') { S.tune.sc = clone(S.tune.base); save(); apply(); return render(); }
+    if (a === 'tsave') return tuneSave();
+    if (a === 'tadopt') { tuneAdopt(); return render(); }
+  }
+
   // ---------------------------------------------------------------- HUD
   var css = document.createElement('style');
   css.textContent =
     '#lab{position:fixed;z-index:50;width:340px;max-width:calc(100vw - 12px);display:none;box-sizing:border-box;font-family:"Barlow Semi Condensed","Segoe UI",sans-serif;overflow:auto;' +
-    'color:#ebebeb;background:rgba(22,21,24,0.96);border:1px solid #515053;border-radius:7px;box-shadow:0 10px 30px rgba(0,0,0,0.6);user-select:none;-webkit-user-select:none;touch-action:pan-y}' +
+    'color:#ebebeb;background:rgba(22,21,24,0.96);border:1px solid #515053;border-radius:7px;box-shadow:0 10px 30px rgba(0,0,0,0.6);user-select:none;-webkit-user-select:none;touch-action:pan-y;scrollbar-width:thin;scrollbar-color:#4a484e transparent}' +
     '#lab .hd{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:6px;padding:7px 8px 7px 10px;background:#19181b;border-bottom:1px solid #3d3b40;cursor:move;touch-action:none;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase}' +
     '#lab .hd span{flex:1}#lab .bd{padding:8px 10px 10px}#lab.min .bd{display:none}' +
     '#lab button{font-family:inherit;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#ebebeb;background:linear-gradient(#49474d,#2d2c30);border:none;border-radius:4px;padding:6px 8px;cursor:pointer;box-shadow:0 1px 0 #0f0e10,inset 0 1px 0 rgba(255,255,255,0.09)}' +
@@ -881,11 +1007,24 @@
     '#lab .feat{font-size:10px;color:#c9c6d0;line-height:1.45;letter-spacing:0.02em}#lab .feat b{color:#8f8d92;font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:0.08em}' +
     '#lab ul{margin:4px 0;padding:0;list-style:none}#lab li{font-size:11px;line-height:1.4;padding:5px 0;border-bottom:1px solid #2e2d31;letter-spacing:0.01em}' +
     '#lab li s{display:inline-block;text-decoration:none;font-size:8px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:1px 4px;border-radius:2px;margin-right:5px;vertical-align:1px;color:#141316}' +
-    '#lab .k-taste{background:#eded78}#lab .k-rule{background:#ff8a7a}#lab .k-prefer{background:#7fd99a}#lab .k-avoid{background:#c9c6d0}#lab .k-combo{background:#8ab8ff}#lab .k-clash{background:#e8a0ff}#lab .k-drivers{background:#f0b45a}';
+    '#lab .k-taste{background:#eded78}#lab .k-rule{background:#ff8a7a}#lab .k-prefer{background:#7fd99a}#lab .k-avoid{background:#c9c6d0}#lab .k-combo{background:#8ab8ff}#lab .k-clash{background:#e8a0ff}#lab .k-drivers{background:#f0b45a}' +
+    // the tuner window's element rows: label, ◀, value, ▶
+    '#lab .tr{display:grid;grid-template-columns:92px 26px 1fr 26px;gap:4px;align-items:center;margin:3px 0}#lab .tr button{padding:4px 0;font-size:11px}' +
+    '#lab .tr>span{font-size:9px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:#a6a4a8;line-height:1.15}' +
+    '#lab .tr>b{font-size:11px;font-weight:600;text-align:center;background:#0b0b0c;border-radius:3px;padding:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 0 0 1px #2e2d31}' +
+    '#lab .tr>b.chg{box-shadow:0 0 0 1px #eded78}#lab .tr>b i{font-style:normal;font-size:9px;color:#77757b;margin-left:5px}#lab .tr>b.na{color:#5d5b60}' +
+    '#lab .tg{margin-top:9px;padding-top:8px;border-top:1px solid #3d3b40}#lab .tg>span{font-size:10px;color:#eded78}#lab .tg>b{color:#eded78}' +
+    '#lab .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;box-shadow:0 0 0 1px rgba(0,0,0,0.6)}' +
+    '#lab .tfix{font-size:9px;color:#77757b;letter-spacing:0.04em;line-height:1.4;margin-top:2px}#lab .cand i.tn{color:#9ad;cursor:pointer;font-weight:800;letter-spacing:0.08em}';
+  css.textContent = css.textContent.replace(/#lab/g, '.lw');   // shared by the Lab window and the tuner window
   document.head.appendChild(css);
   var hud = document.createElement('div');
-  hud.id = 'lab';
+  hud.id = 'lab'; hud.className = 'lw';
   document.body.appendChild(hud);
+  var tw = document.createElement('div');   // the tuner window takes the Lab window's place while it is open
+  tw.id = 'tune'; tw.className = 'lw';
+  document.body.appendChild(tw);
+  tw.addEventListener('click', tuneClick);
   var hudPos = false;
   function placeHud() {
     if (hudPos || !ui.screen) return;
@@ -895,7 +1034,9 @@
     hud.style.left = Math.max(6, r.left + 6) + 'px';
     hud.style.top = Math.max(6, r.top + 6) + 'px';
     hud.style.maxHeight = Math.max(260, Math.min(window.innerHeight - 12, r.height - 12)) + 'px';
+    syncTw();
   }
+  function syncTw() { ['left', 'top', 'width', 'maxHeight'].forEach(function (p) { tw.style[p] = hud.style[p]; }); }
   var msgT = 0, msgText = '';
   function flashMsg(t) { msgText = t; render(); clearTimeout(msgT); msgT = setTimeout(function () { msgText = ''; render(); }, 7000); }
   var starStr = function (n) { return n ? '★★★★★'.slice(0, n) : ''; };
@@ -903,17 +1044,25 @@
   var SUFFIX = { 'panel.sat': ' saturation', 'panel.light': ' windows', stage: ' background', accent: ' accent', outline: ' outline', texStrength: ' strength',
     sheen: ' sheen', cap: ' cap', skirt: ' skirt', pointer: ' pointer', pointerColor: ' pointer colour', scale: ' scale', weight: ' weight', tracking: ' spacing',
     labelColor: ' labels', nameplate: ' nameplates' };
+  function featPhrase(k, v) { return k.indexOf('hue.') === 0 ? DIM[k].label.split(' ')[0].toLowerCase() + ' ' + valueName(k, v) : valueName(k, v) + (SUFFIX[k] || ''); }
   function featSummary(f) {
     var by = {};
     DIMS.forEach(function (d) {
       if (d.k === 'texStrength' && f.texture === 'flat') return;
-      var s = d.k.indexOf('hue.') === 0 ? d.label.split(' ')[0].toLowerCase() + ' ' + valueName(d.k, f[d.k]) : valueName(d.k, f[d.k]) + (SUFFIX[d.k] || '');
-      (by[d.group] = by[d.group] || []).push(s);
+      (by[d.group] = by[d.group] || []).push(featPhrase(d.k, f[d.k]));
     });
     return Object.keys(by).map(function (g) { return '<b>' + g + '</b> ' + esc(by[g].join(' · ')); }).join('<br>');
   }
+  function itemName(it) { return it.name || 'R' + it.round + it.letter; }
+  function tileName(n) { return n.length > 12 ? n.replace(/^Favourite /, 'Fav ') : n; }
   function render() {
+    tw.style.display = 'none';
     if (!S.open) { hud.style.display = 'none'; return; }
+    if (S.tune) {
+      hud.style.display = 'none'; tw.style.display = 'block'; syncTw();
+      var top = tw.scrollTop; tw.innerHTML = tuneHtml(); tw.scrollTop = top;
+      return;
+    }
     hud.style.display = 'block';
     var h = '<div class="hd"><span>Style Lab · Round ' + S.round + '</span><button class="x" data-act="min">' + (hud.classList.contains('min') ? '+' : '–') + '</button><button class="x" data-act="close">×</button></div><div class="bd">';
     h += '<div class="row">' + [['rate', 'Rate'], ['folder', '5★ Folder (' + S.folder.length + ')'], ['insights', 'Insights']].map(function (t) {
@@ -942,19 +1091,19 @@
   }
   function folderHtml() {
     var fi = selItem(), sel = fi && fi.item, h = '';
-    h += '<div class="row"><button data-act="adopt"' + (fi ? '' : ' disabled') + '>Adopt</button><button data-act="fremove"' + (fi && !fi.home ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (S.adopted ? '' : ' disabled') + '>Built-in look</button></div>';
+    h += '<div class="row"><button data-act="adopt"' + (fi ? '' : ' disabled') + '>Adopt</button><button data-act="tune"' + (fi ? '' : ' disabled') + '>Tune…</button><button data-act="fremove"' + (fi && !fi.home ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (S.adopted ? '' : ' disabled') + ' title="Back to the built-in look">Built-in</button></div>';
     h += '<div class="row"><button data-act="send" class="on"' + (S.folder.length ? '' : ' disabled') + '>Send to home base</button><button data-act="savedisk"' + (S.folder.length ? '' : ' disabled') + '>Save folder…</button><button data-act="exportadopted"' + (S.adopted ? '' : ' disabled') + '>Export adopted</button></div>';
     if (copyBox) h += '<textarea readonly style="width:100%;height:70px;box-sizing:border-box;font:10px monospace;background:#0b0b0c;color:#c9c6d0;border:1px solid #3d3b40;border-radius:4px">' + esc(copyBox) + '</textarea>';
-    h += '<div class="meta">Adopted: ' + (S.adopted ? (S.adopted.home && homeById(S.adopted.id) ? homeById(S.adopted.id).name : 'design ' + S.adopted.id) : 'built-in look') + '</div>';
+    h += '<div class="meta">Adopted: ' + esc(S.adopted ? (S.adopted.home && homeById(S.adopted.id) ? homeById(S.adopted.id).name : S.adopted.name || 'design ' + S.adopted.id) : 'built-in look') + '</div>';
     if (sel) {
-      h += '<div class="feat" style="margin-top:4px"><b>' + esc(fi.home ? sel.name : 'R' + sel.round + sel.letter) + '</b>' + (fi.home && sel.from ? ' ' + esc(sel.from) : '') +
+      h += '<div class="feat" style="margin-top:4px"><b>' + esc(fi.home ? sel.name : itemName(sel)) + '</b>' + (sel.from ? ' ' + esc(sel.from) : '') +
         (fi.home && sel.edited ? ' · edited at home base' : '') + (fi.home && sel.note ? '<br>' + esc(sel.note) : '') + '<br>' + featSummary(sel.sc.f) + '</div>';
     }
     h += '<div class="meta" style="margin-top:8px">Home base (' + (HOME.state === 'ok' ? HOME.designs.length : HOME.state === 'loading' ? '…' : 'offline') + ')</div>';
     if (HOME.designs.length) {
       h += '<div class="grid">';
       HOME.designs.forEach(function (d, i) {
-        h += '<div class="cand' + (S.fsel === 'h:' + i ? ' sel' : '') + '" data-act="fsel" data-k="h:' + i + '" data-thumb="h:' + i + '"><b>' + esc(d.name.slice(0, d.edited ? 8 : 12)) + '</b>' + (d.edited ? '<em>edited</em>' : '') + '<i>home</i></div>';
+        h += '<div class="cand' + (S.fsel === 'h:' + i ? ' sel' : '') + '" data-act="fsel" data-k="h:' + i + '" data-thumb="h:' + i + '"><b>' + esc(tileName(d.name).slice(0, d.edited ? 8 : 12)) + '</b>' + (d.edited ? '<em>edited</em>' : '') + '<i class="tn" data-act="tune" data-k="h:' + i + '">Tune ▸</i></div>';
       });
       h += '</div>';
     } else h += '<div class="feat">Favourites curated at home base appear here. Send yours with "Send to home base".</div>';
@@ -962,7 +1111,7 @@
     if (!S.folder.length) h += '<div class="feat">Every design you rate 5★ lands here. Pick one to preview it on the panel, then Adopt it as the app\'s look.</div>';
     else {
       h += '<div class="grid">';
-      S.folder.forEach(function (it, i) { h += '<div class="cand' + (S.fsel === 'd:' + i || S.fsel === i ? ' sel' : '') + '" data-act="fsel" data-k="d:' + i + '" data-thumb="f:' + i + '"><b>R' + it.round + it.letter + '</b><i>★★★★★</i></div>'; });
+      S.folder.forEach(function (it, i) { h += '<div class="cand' + (S.fsel === 'd:' + i || S.fsel === i ? ' sel' : '') + '" data-act="fsel" data-k="d:' + i + '" data-thumb="f:' + i + '"><b>' + esc(tileName(itemName(it)).slice(0, 12)) + '</b><i class="tn" data-act="tune" data-k="d:' + i + '">Tune ▸</i></div>'; });
       h += '</div>';
     }
     return h;
@@ -996,6 +1145,7 @@
     if (a === 'prev') return select(S.sel - 1);
     if (a === 'next') return select(S.sel + 1);
     if (a === 'round') { nextRound(); return render(); }
+    if (a === 'tune') { if (el.dataset.k) S.fsel = el.dataset.k; return openTune(); }
     if (a === 'fsel') { S.fsel = el.dataset.k; save(); apply(); return render(); }
     if (a === 'adopt') { var fi = selItem(); if (fi) adopt(fi.sc); return render(); }
     if (a === 'fremove') { var fr = selItem(); if (fr && !fr.home) { S.folder.splice(fr.i, 1); S.fsel = ''; save(); apply(); } return render(); }
@@ -1011,16 +1161,18 @@
       var keep = S.adopted; S = fresh(); S.adopted = keep; S.open = true; nextRound(true); save(); apply(); return render();
     }
   });
-  hud.addEventListener('pointerdown', function (e) {
-    if (!e.target.closest('.hd') || e.target.closest('button')) return;
-    var r = hud.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
-    hud.setPointerCapture(e.pointerId);
-    var move = function (ev) { hudPos = true; hud.style.left = cl(ev.clientX - dx, 0, window.innerWidth - 60) + 'px'; hud.style.top = cl(ev.clientY - dy, 0, window.innerHeight - 30) + 'px'; };
-    var up = function () { hud.removeEventListener('pointermove', move); hud.removeEventListener('pointerup', up); };
-    hud.addEventListener('pointermove', move); hud.addEventListener('pointerup', up);
+  [hud, tw].forEach(function (win) {   // drag by the title bar; both windows share one position
+    win.addEventListener('pointerdown', function (e) {
+      if (!e.target.closest('.hd') || e.target.closest('button')) return;
+      var r = win.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+      win.setPointerCapture(e.pointerId);
+      var move = function (ev) { hudPos = true; hud.style.left = cl(ev.clientX - dx, 0, window.innerWidth - 60) + 'px'; hud.style.top = cl(ev.clientY - dy, 0, window.innerHeight - 30) + 'px'; syncTw(); };
+      var up = function () { win.removeEventListener('pointermove', move); win.removeEventListener('pointerup', up); };
+      win.addEventListener('pointermove', move); win.addEventListener('pointerup', up);
+    });
   });
   document.addEventListener('keydown', function (e) {
-    if (!S.open || (e.target && e.target.getAttribute && e.target.getAttribute('role') === 'slider')) return;
+    if (!S.open || S.tune || (e.target && e.target.getAttribute && e.target.getAttribute('role') === 'slider')) return;
     if (S.tab === 'rate' && e.key >= '1' && e.key <= '5') rate(S.sel, +e.key);
     else if (S.tab === 'rate' && e.key === 'ArrowRight') select(S.sel + 1);
     else if (S.tab === 'rate' && e.key === 'ArrowLeft') select(S.sel - 1);
@@ -1052,6 +1204,7 @@
       if (d && JSON.stringify(d.sc) !== JSON.stringify(S.adopted)) { S.adopted = clone(d.sc); save(); }
     }
     if (hp.fav) previewFav = homeById(decodeURIComponent(hp.fav));
+    if (hp.tune) { S.open = true; if (!S.round) nextRound(true); S.tab = 'folder'; S.fsel = decodeURIComponent(hp.tune); openTune(); placeHud(); }
     apply(); render();
     var rep = document.getElementById('__report');
     if (hp.fav && rep) rep.textContent = JSON.stringify({ fav: hp.fav, found: !!previewFav, home: HOME.state, count: HOME.designs.length, errors: REPORT });
@@ -1090,6 +1243,7 @@
     return out;
   }
   window.__lab = { state: function () { return S; }, rate: rate, nextRound: nextRound, select: select, toggle: toggle, insights: insights, simulate: simulate,
+    openTune: function (k) { S.fsel = k; openTune(); }, tuneCycle: tuneCycle, tuneGroup: tuneGroup, tuneShuffle: tuneShuffle, tuneSave: tuneSave,
     styleCss: function (sc) { return styleCss(resolve(sc || SHIPPED)); }, shipped: SHIPPED, home: HOME, homeExport: homeExport, resolve: resolve, derive: function (sc) { return derive(resolve(sc), sc.f); } };
   if (hp.labdemo) {   // index.html#labdemo=N: show N simulated rounds in the HUD (nothing is saved)
     var real = S; simulate(+hp.labdemo || 8, true); simulating = true; S.open = true; S.adopted = real.adopted; apply(); render();
