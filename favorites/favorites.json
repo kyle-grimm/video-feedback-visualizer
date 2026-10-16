@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-10-15",
+ "updated": "2026-10-16",
  "designs": [
   {
    "id": "zjvns23",
@@ -344,12 +344,533 @@
     "l": 0.007,
     "p": -0.022
    }
+  },
+  {
+   "id": "zm1psg6",
+   "name": "Favourite 8",
+   "from": "round 1 design A (5★)",
+   "features": {
+    "hue.feedback": "amber",
+    "hue.chroma": "lime",
+    "hue.transform": "mint",
+    "hue.color": "magenta",
+    "hue.layers": "teal",
+    "panel.sat": "soft",
+    "panel.light": "mid",
+    "stage": "black",
+    "accent": "cyan",
+    "outline": "none",
+    "texture": "grille",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "black",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "dim",
+    "nameplate": "ink"
+   },
+   "raw": {
+    "hue": [
+     38.483,
+     85.606,
+     149.781,
+     319.632,
+     165.593,
+     254.772
+    ],
+    "sat": [
+     0.72,
+     0.98,
+     1.05,
+     1.1,
+     1.1,
+     0.22
+    ],
+    "pSat": 0.3211,
+    "pLight": 0.3479,
+    "kSat": 0.72,
+    "kLight": 0.68,
+    "sHue": 16.187,
+    "sSat": 0,
+    "sLight": 0.0513,
+    "texture": "grille",
+    "texStr": 0.0463,
+    "sheen": 0.5,
+    "outline": "none",
+    "tab": "ink",
+    "ptr": "family",
+    "label": "dim",
+    "cap": "black",
+    "glassHue": 141,
+    "accentHue": 164.74
+   }
+  },
+  {
+   "id": "d9f1yxw",
+   "name": "Favourite 9",
+   "from": "round 1 design D (5★)",
+   "features": {
+    "hue.feedback": "lime",
+    "hue.chroma": "red",
+    "hue.transform": "cyan",
+    "hue.color": "magenta",
+    "hue.layers": "blue",
+    "panel.sat": "soft",
+    "panel.light": "pale",
+    "stage": "slate",
+    "accent": "white",
+    "outline": "none",
+    "texture": "flat",
+    "texStrength": "strong",
+    "sheen": "glossy",
+    "cap": "chrome",
+    "skirt": "smooth",
+    "pointer": "line",
+    "pointerColor": "ink",
+    "scale": "familyArc",
+    "font": "sairaC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "accent",
+    "nameplate": "dark"
+   },
+   "jitter": {
+    "h": [
+     10.917,
+     -10.665,
+     2.294,
+     0.226,
+     -2.808
+    ],
+    "s": [
+     0.004,
+     0.043,
+     -0.063,
+     0.025,
+     -0.062
+    ],
+    "l": 0.003,
+    "p": 0.005
+   }
+  },
+  {
+   "id": "xt08km8",
+   "name": "Favourite 10",
+   "from": "round 3 design A (5★)",
+   "features": {
+    "hue.feedback": "lime",
+    "hue.chroma": "neutral",
+    "hue.transform": "cyan",
+    "hue.color": "red",
+    "hue.layers": "violet",
+    "panel.sat": "soft",
+    "panel.light": "deep",
+    "stage": "black",
+    "accent": "white",
+    "outline": "family",
+    "texture": "grille",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "black",
+    "skirt": "smooth",
+    "pointer": "line",
+    "pointerColor": "ink",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "accent",
+    "nameplate": "dark"
+   },
+   "jitter": {
+    "h": [
+     2.322,
+     -4.476,
+     -4.284,
+     -3.634,
+     -3.578
+    ],
+    "s": [
+     -0.099,
+     -0.087,
+     0.069,
+     0.042,
+     0.045
+    ],
+    "l": 0.001,
+    "p": -0.011
+   }
+  },
+  {
+   "id": "sfaptnf",
+   "name": "Favourite 11",
+   "from": "round 3 design E (5★)",
+   "features": {
+    "hue.feedback": "yellow",
+    "hue.chroma": "lime",
+    "hue.transform": "violet",
+    "hue.color": "magenta",
+    "hue.layers": "blue",
+    "panel.sat": "soft",
+    "panel.light": "mid",
+    "stage": "slate",
+    "accent": "white",
+    "outline": "gray",
+    "texture": "flat",
+    "texStrength": "subtle",
+    "sheen": "glossy",
+    "cap": "chrome",
+    "skirt": "fluted",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "robotoC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "dim",
+    "nameplate": "outline"
+   },
+   "jitter": {
+    "h": [
+     1.057,
+     3.298,
+     -5.377,
+     1.891,
+     -6.355
+    ],
+    "s": [
+     -0.022,
+     -0.052,
+     0.074,
+     0.019,
+     -0.09
+    ],
+    "l": 0.018,
+    "p": -0.008
+   }
+  },
+  {
+   "id": "kgueggh",
+   "name": "Favourite 12",
+   "from": "round 3 design I (5★)",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "lime",
+    "hue.transform": "teal",
+    "hue.color": "neutral",
+    "hue.layers": "blue",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "white",
+    "outline": "none",
+    "texture": "flat",
+    "texStrength": "medium",
+    "sheen": "glossy",
+    "cap": "black",
+    "skirt": "smooth",
+    "pointer": "wedge",
+    "pointerColor": "ink",
+    "scale": "ticks",
+    "font": "sairaC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "wide",
+    "labelColor": "familyDark",
+    "nameplate": "dark"
+   },
+   "jitter": {
+    "h": [
+     -2.287,
+     1.086,
+     -0.279,
+     6.371,
+     0.399
+    ],
+    "s": [
+     -0.073,
+     0.014,
+     0.007,
+     0.015,
+     0.086
+    ],
+    "l": 0.003,
+    "p": 0.009
+   }
+  },
+  {
+   "id": "dnck5x5",
+   "name": "Favourite 13",
+   "from": "round 4 design G (5★)",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "lime",
+    "hue.transform": "cyan",
+    "hue.color": "magenta",
+    "hue.layers": "blue",
+    "panel.sat": "soft",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "white",
+    "outline": "gray",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "glossy",
+    "cap": "black",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "ink",
+    "scale": "none",
+    "font": "sairaC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     -5.826,
+     -8.282,
+     -3.333,
+     -1.285,
+     4.742
+    ],
+    "s": [
+     -0.046,
+     0.058,
+     -0.08,
+     0.099,
+     0.008
+    ],
+    "l": -0.01,
+    "p": 0.007
+   }
+  },
+  {
+   "id": "zteq6ps",
+   "name": "Favourite 14",
+   "from": "round 5 design B (5★)",
+   "features": {
+    "hue.feedback": "blue",
+    "hue.chroma": "red",
+    "hue.transform": "cyan",
+    "hue.color": "magenta",
+    "hue.layers": "violet",
+    "panel.sat": "soft",
+    "panel.light": "mid",
+    "stage": "slate",
+    "accent": "white",
+    "outline": "gray",
+    "texture": "flat",
+    "texStrength": "subtle",
+    "sheen": "glossy",
+    "cap": "black",
+    "skirt": "knurled",
+    "pointer": "wedge",
+    "pointerColor": "amber",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "accent",
+    "nameplate": "dark"
+   },
+   "jitter": {
+    "h": [
+     3.297,
+     3.701,
+     -1.39,
+     7.118,
+     -9.632
+    ],
+    "s": [
+     0.086,
+     0.048,
+     -0.063,
+     -0.02,
+     0.095
+    ],
+    "l": 0.017,
+    "p": 0.02
+   }
+  },
+  {
+   "id": "4efucmc",
+   "name": "Favourite 15",
+   "from": "round 6 design H (5★)",
+   "features": {
+    "hue.feedback": "lime",
+    "hue.chroma": "violet",
+    "hue.transform": "green",
+    "hue.color": "neutral",
+    "hue.layers": "violet",
+    "panel.sat": "soft",
+    "panel.light": "pale",
+    "stage": "black",
+    "accent": "cyan",
+    "outline": "none",
+    "texture": "flat",
+    "texStrength": "medium",
+    "sheen": "glossy",
+    "cap": "black",
+    "skirt": "knurled",
+    "pointer": "wedge",
+    "pointerColor": "family",
+    "scale": "none",
+    "font": "sairaC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "wide",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     0.088,
+     -6.593,
+     8.917,
+     -6.077,
+     7.873
+    ],
+    "s": [
+     0.087,
+     0.027,
+     -0.059,
+     -0.037,
+     0.059
+    ],
+    "l": -0.011,
+    "p": 0.028
+   }
+  },
+  {
+   "id": "3xhcswr",
+   "name": "Favourite 16",
+   "from": "round 7 design D (5★)",
+   "features": {
+    "hue.feedback": "blue",
+    "hue.chroma": "red",
+    "hue.transform": "green",
+    "hue.color": "magenta",
+    "hue.layers": "magenta",
+    "panel.sat": "soft",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "cyan",
+    "outline": "none",
+    "texture": "hatch",
+    "texStrength": "medium",
+    "sheen": "soft",
+    "cap": "black",
+    "skirt": "smooth",
+    "pointer": "wedge",
+    "pointerColor": "ink",
+    "scale": "none",
+    "font": "sairaC",
+    "weight": "600",
+    "case": "upper",
+    "tracking": "tight",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     9.618,
+     -3.313,
+     2.341,
+     -4.3,
+     0.318
+    ],
+    "s": [
+     0.054,
+     -0.04,
+     0.027,
+     0.074,
+     -0.003
+    ],
+    "l": 0.012,
+    "p": -0.021
+   }
+  },
+  {
+   "id": "6eylf07",
+   "name": "Favourite 17",
+   "from": "round 8 design F (5★)",
+   "features": {
+    "hue.feedback": "yellow",
+    "hue.chroma": "lime",
+    "hue.transform": "violet",
+    "hue.color": "amber",
+    "hue.layers": "magenta",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "white",
+    "outline": "gray",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "glossy",
+    "cap": "chrome",
+    "skirt": "smooth",
+    "pointer": "wedge",
+    "pointerColor": "ink",
+    "scale": "ticks",
+    "font": "sairaC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "tight",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     9.091,
+     -8.965,
+     -9.177,
+     -3.191,
+     -5.68
+    ],
+    "s": [
+     0.036,
+     -0.034,
+     -0.051,
+     0.053,
+     0.086
+    ],
+    "l": -0.006,
+    "p": -0.001
+   }
   }
  ],
  "insights": [
-  "rule: Lighter windows are preferred: keep the window lightness at or above 64% lightness. 96% of your 4–5★ designs do; designs on the other side average 1.2★ (n=195) vs 2.3★ (n=116).",
-  "drivers: What drives your ratings most: window lightness (8%), chromakey window colour (7%), feedback window colour (6%), sheen (6%), layers window colour (6%).",
-  "avoid: Feedback window colour: magenta disliked: −0.6★ against the alternatives, everything else equal (1.2★ average over 14 ratings).",
-  "clash: Clash: color window colour red with pointer colour red: −0.5★ beyond their separate effects (1.8★ average, n=8)."
+  "taste: Your taste so far: chromakey window colour red · knob skirt smooth · letter spacing tight.",
+  "rule: Textures should stay mild: keep the texture amount at or below subtle. 82% of your 4–5★ designs do; designs on the other side average 1.5★ (n=67) vs 2.3★ (n=61).",
+  "prefer: Letter spacing: tight preferred: +0.6★ against the alternatives, everything else equal (2.0★ average over 33 ratings).",
+  "prefer: Chromakey window colour: red preferred: +0.5★ against the alternatives, everything else equal (2.6★ average over 18 ratings).",
+  "prefer: Transform window colour: violet preferred: +0.5★ against the alternatives, everything else equal (2.5★ average over 11 ratings).",
+  "avoid: Letter spacing: normal disliked: −0.7★ against the alternatives, everything else equal (2.0★ average over 61 ratings).",
+  "drivers: What drives your ratings most: label/window contrast (19%), distinct window colours (15%), window lightness (11%), letter spacing (7%), pointer/cap contrast (5%).",
+  "prefer: Window saturation: soft preferred: +0.5★ against the alternatives, everything else equal (2.4★ average over 51 ratings).",
+  "prefer: Knob skirt: smooth preferred: +0.5★ against the alternatives, everything else equal (2.3★ average over 35 ratings).",
+  "prefer: Knob pointer: notch preferred: +0.5★ against the alternatives, everything else equal (1.4★ average over 17 ratings).",
+  "prefer: Knob cap: graphite preferred: +0.4★ against the alternatives, everything else equal (1.9★ average over 15 ratings).",
+  "prefer: Colour harmony: complementary preferred: +0.6★ against the alternatives, everything else equal (2.6★ average over 5 ratings).",
+  "avoid: Window lightness: deep disliked: −0.5★ against the alternatives, everything else equal (1.6★ average over 18 ratings).",
+  "avoid: Window saturation: rich disliked: −0.5★ against the alternatives, everything else equal (1.8★ average over 36 ratings).",
+  "avoid: Knob pointer: triangle disliked: −0.5★ against the alternatives, everything else equal (1.2★ average over 9 ratings).",
+  "avoid: Knob skirt: family ring disliked: −0.5★ against the alternatives, everything else equal (1.1★ average over 9 ratings).",
+  "avoid: Colour temperature: warm disliked: −0.5★ against the alternatives, everything else equal (1.7★ average over 17 ratings).",
+  "avoid: Transform window colour: green disliked: −0.4★ against the alternatives, everything else equal (2.0★ average over 15 ratings)."
  ]
 }
