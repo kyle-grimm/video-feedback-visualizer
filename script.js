@@ -14,7 +14,7 @@
 //   5. GLSL source (vertex, feedback fragment, display fragment)
 //   6. Camera source
 //   7. Uniform upload + render loop
-//   8. Header keys (pause/freeze/reset/random/record/fullscreen), recording, fit to window
+//   8. Header keys (day-night/freeze/reset/save/recall/record-capture/fullscreen), presets, recording, fit to window
 // ===================================================================
 
 var REPORT = [];
@@ -334,16 +334,22 @@ function makeScreen(x, y, w, h) {
   if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys: Pause, Freeze, Reset, Random, Record, Full in the six rects [x, y, w, h].
+// Header keys: Night/Day, Freeze, Reset, Save, Recall, Record (Capture while frozen), Full in the NKEYS rects
+// [x, y, w, h]. The label size shrinks from fs if the longest label the keys can show would not fit the key width.
+var NKEYS = 7, KEY_LABELS = ['Night', 'Day', 'Freeze', 'Reset', 'Save', 'Recall', 'Record', 'Capture', 'Stop', 'Saving', 'Full'];
 function makeKeys(r, fs) {
-  var K = function (i, label, led, o) { o.fs = fs || 10; return key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); };
-  ui.pause = K(0, 'Pause', 'off', { tint: 'blue', aria: 'Pause time', onClick: function () { timePaused = !timePaused; ui.pause.set(timePaused ? 'on' : 'off'); } });
-  ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); } });
+  fs = fs || 10;
+  var widest = Math.max.apply(null, KEY_LABELS.map(function (t) { return textW(t.toUpperCase(), fs, 700, 0.08); }));
+  fs = Math.min(fs, Math.floor(fs * (r[0][2] - 10) / widest * 10) / 10);
+  var K = function (i, label, led, o) { o.fs = fs; return key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); };
+  ui.scheme = K(0, 'Night', null, { aria: 'Day / night colour scheme', onClick: toggleScheme });
+  ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
   ui.reset = K(2, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
-  ui.rand = K(3, 'Random', null, { aria: 'Randomize', onClick: randomize });
-  ui.rec = K(4, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording });
-  ui.full = K(5, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
-  ui.pause.set(timePaused ? 'on' : 'off'); ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncRec();
+  ui.save = K(3, 'Save', null, { aria: 'Save preset (every knob, the mixer and Chromakey on/off)', onClick: savePreset });
+  ui.recall = K(4, 'Recall', null, { aria: 'Recall the saved preset', onClick: recallPreset });
+  ui.rec = K(5, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording });
+  ui.full = K(6, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncScheme(); syncRec();
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
 function makeCamera(cx, cy, fam) {
@@ -406,8 +412,8 @@ var PG = 14, fontsRebuild = false;
 function buildPortraitPanel() {
   UK = 1.2; UL = 2;
   var ks = 42 * UK, tab = 9 * UL, top0 = 26;
-  var kg = 8, kw = (LW - 5 * kg) / 6, kh = 28 * UK, ky = BEZ[1] + BEZ[3] + PG, rects = [];
-  for (var i = 0; i < 6; i++) rects.push([M + i * (kw + kg), ky, kw, kh]);
+  var kg = 8, kw = (LW - (NKEYS - 1) * kg) / NKEYS, kh = 28 * UK, ky = BEZ[1] + BEZ[3] + PG, rects = [];
+  for (var i = 0; i < NKEYS; i++) rects.push([M + i * (kw + kg), ky, kw, kh]);
   makeKeys(rects, 10 * UL);
 
   // Layers: the pad square against the right edge, the four layer controls in a 2 x 2 grid left of it.
@@ -495,7 +501,7 @@ function buildDefault(land) {
   makeScreen(b[0], b[1], b[2], b[3]);
   if (!LAND) return buildPortraitPanel();
   // Header keys: a column beside the screen.
-  var kn = 6, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
+  var kn = NKEYS, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
   for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
   makeKeys(rects, 9);
   buildLayers();
@@ -1207,7 +1213,6 @@ function renderDisplayPass() {
 
 var simTime = 0;
 var lastNow = performance.now();
-var timePaused = false;
 var frozen = false;
 
 // Render at most 60 times a second. Zoom, rotate, drift and hue drift are applied per rendered frame, so on a
@@ -1222,7 +1227,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   var dt = Math.min((now - lastNow) / 1000, 0.1);
   lastNow = now;
-  if (!timePaused) simTime += dt;
+  simTime += dt;
   if (now < nextRender - 1) return;
   nextRender = now - nextRender > 3 * FRAME_MS ? now + FRAME_MS : nextRender + FRAME_MS;
   if (contextLost) return;
@@ -1276,11 +1281,37 @@ function resetAll() {
   clearScreen();
 }
 
-// Every knob, the mixer puck and the background colour. Camera and Chromakey on/off are left alone.
-function randomize() {
-  Object.keys(PD).forEach(function (k) { params[k] = fromV(PD[k], Math.random()); });
-  params.mixX = Math.random(); params.mixY = Math.random();
+// Day / night colour scheme: the Style Lab (lab.js) owns the two looks and listens through window.onSchemeChange.
+// Night (Favourite 6 tuned) is the standard; Day is Favourite 17 tuned 2. The key names the scheme on show.
+var scheme = 'night';
+function syncScheme() {
+  if (!ui.scheme) return;
+  ui.scheme.txt.textContent = scheme === 'day' ? 'Day' : 'Night';
+  ui.scheme.b.setAttribute('aria-label', scheme === 'day' ? 'Day scheme (switch to night)' : 'Night scheme (switch to day)');
+}
+function toggleScheme() {
+  scheme = scheme === 'day' ? 'night' : 'day';
+  syncScheme();
+  if (window.onSchemeChange) window.onSchemeChange(scheme);
+}
+
+// Preset: one slot holding every knob, the mixer puck and Chromakey on/off (everything Reset restores), kept in
+// localStorage so it survives a reload. Camera on/off is left alone. Recall with nothing saved flashes the key.
+var PRESET_STORE = 'vfv-preset-v1';
+function savePreset() {
+  try { localStorage.setItem(PRESET_STORE, JSON.stringify({ v: 1, t: Date.now(), params: params })); }
+  catch (e) { flash(ui.save); flashTip(ui.save.b, 'Could not save'); return; }
+  ui.save.set('on'); setTimeout(function () { if (ui.save) ui.save.set(null); }, 400);
+  flashTip(ui.save.b, 'Preset saved');
+}
+function recallPreset() {
+  var p = null;
+  try { p = JSON.parse(localStorage.getItem(PRESET_STORE) || 'null'); } catch (e) { p = null; }
+  if (!p || !p.params) { flash(ui.recall); flashTip(ui.recall.b, 'No preset saved'); return; }
+  Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = p.params[k]; });
   syncUI();
+  ui.recall.set('on'); setTimeout(function () { if (ui.recall) ui.recall.set(null); }, 400);
+  flashTip(ui.recall.b, 'Preset recalled');
 }
 
 // Fullscreen. The Fullscreen API where the browser allows it for elements (desktop, Android, iPad). iPhone Safari only
@@ -1343,15 +1374,30 @@ document.addEventListener('webkitfullscreenchange', syncFullscreen);
 var rec = null;
 var REC_FPS = 60, REC_GOP = 2 * REC_FPS;
 function recBitrate(w, h) { return Math.round(Math.min(50e6, w * h * REC_FPS * 0.32)); }   // ~17.7 Mbps at 720p60
+// While Freeze is on (and nothing is recording) the key is Capture: it saves the frozen output as a PNG at the full
+// render resolution. A take already running when Freeze goes on keeps its Stop key.
 function syncRec() {
   if (!ui.rec) return;
-  ui.rec.set(rec ? (rec.saving ? 'sel' : 'rec') : 'off');
-  ui.rec.txt.textContent = rec ? (rec.saving ? 'Saving' : 'Stop') : 'Record';
-  ui.rec.b.setAttribute('aria-label', rec ? 'Stop recording and save' : 'Record the output to a video file');
+  var cap = !rec && frozen;
+  ui.rec.set(rec ? (rec.saving ? 'sel' : 'rec') : cap ? null : 'off');
+  ui.rec.txt.textContent = rec ? (rec.saving ? 'Saving' : 'Stop') : cap ? 'Capture' : 'Record';
+  ui.rec.b.setAttribute('aria-label', rec ? 'Stop recording and save' : cap ? 'Capture the output as an image' : 'Record the output to a video file');
 }
 function toggleRecording() {
   if (rec) { if (!rec.saving) rec.stop(); return; }
+  if (frozen) return captureImage();
   startRecording().catch(function (e) { REPORT.push('REC ' + (e && e.message || e)); rec = null; syncRec(); flash(ui.rec); });
+}
+// The drawing buffer isn't preserved, so draw the display pass and read it back in the same task.
+function captureImage() {
+  if (contextLost) { flash(ui.rec); return; }
+  renderDisplayPass();
+  glCanvas.toBlob(function (blob) {
+    if (!blob) { REPORT.push('CAPTURE failed'); flash(ui.rec); return; }
+    saveBlob(blob, recFileName('png'));
+    flashTip(ui.rec.b, 'Image saved');
+  }, 'image/png');
+  ui.rec.set('on'); setTimeout(function () { if (ui.rec) syncRec(); }, 300);
 }
 function recFileName(ext) {
   var d = new Date(), z = function (n) { return (n < 10 ? '0' : '') + n; };

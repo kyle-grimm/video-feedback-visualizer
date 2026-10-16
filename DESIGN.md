@@ -783,3 +783,23 @@ The panel previews every change live. Changing an element drops any home-base ov
 progress is kept in the Lab state, so it survives a reload. `#tune=h:3` opens the tuner on home-base favourite 4.
 Tested in headless Chrome at 900 and 500 px wide with the seven home-base favourites: group and element cycling,
 live CSS change, font change, save (name, origin, export), back, shuffle + adopt, reload.
+
+## 19. Day / night schemes, presets, Capture (2026-10-16)
+The header keys are now **Night/Day**, Freeze, Reset, **Save**, **Recall**, Record (**Capture** while frozen), Full.
+Pause and Random are gone. Seven keys share the row (portrait) or column (landscape); the label size shrinks from the
+layout's size only as far as the longest label any key can show ("Capture") needs to fit the key width.
+- **Night / Day**: two colour schemes. Night is the standard look: home-base Favourite 6 tuned (`m4dqf4b`). Day is
+  Favourite 17 tuned 2 (`3w46slf`). Both are built into `lab.js` (`BUILTIN`) and refreshed from
+  `favorites/favorites.json` by id at startup, so editing either entry there changes the scheme. The key names the
+  scheme on show; the choice is kept in the Lab state (`mode`). In the Lab, Adopt sets the look of the scheme on show
+  and **Standard** (was Built-in) returns that scheme to its standard look. A look adopted before this change is
+  dropped so the new standard shows. The original shipped look stays in `lab.js` as `ORIGINAL`.
+- **Save / Recall**: one preset slot (localStorage `vfv-preset-v1`) holding every knob, the mixer puck and Chromakey
+  on/off (what Reset restores); camera on/off is left alone. Recall with nothing saved flashes the key and says so.
+- **Capture**: while Freeze is on and nothing is recording, Record becomes Capture, which saves the frozen output as a
+  PNG at the full render resolution (720 x 1280 or 1280 x 720, `feedback-<date>-<time>.png`, via the browser's
+  download). A take already running when Freeze goes on keeps its Stop key and records the frozen image as before.
+Tested in headless Chromium (SwiftShader) at 900 x 1340 and 1340 x 910: Night look on first load, Night → Day switches
+to Favourite 17 tuned 2 and survives a reload, Save/Recall restores knob and mixer values, Recall with no preset
+flashes, Freeze turns Record into Capture and Capture saved a 720 x 1280 PNG, unfreezing restores Record, all seven
+labels fit their keys in both layouts.

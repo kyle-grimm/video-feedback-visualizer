@@ -851,6 +851,153 @@
     "l": -0.006,
     "p": -0.001
    }
+  },
+  {
+   "id": "v7p1759",
+   "name": "Favourite 17 tuned",
+   "from": "tuned from Favourite 17",
+   "features": {
+    "hue.feedback": "yellow",
+    "hue.chroma": "lime",
+    "hue.transform": "violet",
+    "hue.color": "amber",
+    "hue.layers": "magenta",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "cyan",
+    "outline": "family",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "glossy",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "sairaC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "tight",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     9.091,
+     -8.965,
+     -9.177,
+     -3.191,
+     -5.68
+    ],
+    "s": [
+     0.036,
+     -0.034,
+     -0.051,
+     0.053,
+     0.086
+    ],
+    "l": -0.006,
+    "p": -0.001
+   }
+  },
+  {
+   "id": "3w46slf",
+   "name": "Favourite 17 tuned 2",
+   "from": "tuned from Favourite 17 tuned",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "lime",
+    "hue.transform": "violet",
+    "hue.color": "amber",
+    "hue.layers": "blue",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "light",
+    "accent": "cyan",
+    "outline": "family",
+    "texture": "hatch",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "sairaC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "tight",
+    "labelColor": "familyDark",
+    "nameplate": "ink"
+   },
+   "jitter": {
+    "h": [
+     9.091,
+     -8.965,
+     -9.177,
+     -3.191,
+     -5.68
+    ],
+    "s": [
+     0.036,
+     -0.034,
+     -0.051,
+     0.053,
+     0.086
+    ],
+    "l": -0.006,
+    "p": -0.001
+   }
+  },
+  {
+   "id": "m4dqf4b",
+   "name": "Favourite 6 tuned",
+   "from": "tuned from Favourite 6",
+   "features": {
+    "hue.feedback": "red",
+    "hue.chroma": "lime",
+    "hue.transform": "violet",
+    "hue.color": "blue",
+    "hue.layers": "neutral",
+    "panel.sat": "rich",
+    "panel.light": "pale",
+    "stage": "slate",
+    "accent": "cyan",
+    "outline": "none",
+    "texture": "scanlines",
+    "texStrength": "subtle",
+    "sheen": "soft",
+    "cap": "graphite",
+    "skirt": "knurled",
+    "pointer": "line",
+    "pointerColor": "family",
+    "scale": "ticks",
+    "font": "barlowSC",
+    "weight": "700",
+    "case": "upper",
+    "tracking": "normal",
+    "labelColor": "familyDark",
+    "nameplate": "black"
+   },
+   "jitter": {
+    "h": [
+     10.917,
+     -10.665,
+     2.294,
+     0.226,
+     -2.808
+    ],
+    "s": [
+     0.004,
+     0.043,
+     -0.063,
+     0.025,
+     -0.062
+    ],
+    "l": 0.003,
+    "p": 0.005
+   }
   }
  ],
  "insights": [

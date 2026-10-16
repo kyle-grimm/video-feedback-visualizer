@@ -140,7 +140,8 @@
   // Style parameters are design mode's colour genome plus the new knob / text fields; STYLE0 holds the new fields'
   // defaults, which add no CSS, so the shipped scheme renders exactly as it did under design mode.
   var STYLE0 = { skirt: 'knurled', pointer: 'line', scale: 'ticks', font: 'barlowSC', weight: '700', textCase: 'upper', tracking: 'normal', accSat: 1, glassSat: 0.5 };
-  var SHIPPED = {
+  // The look the app shipped with before the day / night schemes (2026-10-16); kept for reference.
+  var ORIGINAL = {
     id: 'shipped', tag: 'current',
     raw: { hue: [38.483, 85.606, 149.781, 319.632, 165.593, 254.772], sat: [0.72, 0.98, 1.05, 1.1, 1.1, 0.22], pSat: 0.3211, pLight: 0.3479,
       kSat: 0.72, kLight: 0.68, sHue: 16.187, sSat: 0, sLight: 0.0513, texture: 'grille', texStr: 0.0463, sheen: 0.5, outline: 'none', tab: 'ink',
@@ -150,6 +151,14 @@
       skirt: 'knurled', pointer: 'line', pointerColor: 'family', scale: 'ticks', font: 'barlowSC', weight: '700', case: 'upper', tracking: 'normal',
       labelColor: 'dim', nameplate: 'ink' }
   };
+  // The standard looks of the two colour schemes (the Night / Day key): Night is Favourite 6 tuned, the app's standard
+  // look; Day is Favourite 17 tuned 2. Both are home-base designs, so later edits to them in favorites/favorites.json
+  // carry over (matched by id at startup). A design adopted in the Lab replaces the look of the scheme on show.
+  var BUILTIN = {
+    night: { id: 'm4dqf4b', home: true, name: 'Favourite 6 tuned', f: {"hue.feedback":"red","hue.chroma":"lime","hue.transform":"violet","hue.color":"blue","hue.layers":"neutral","panel.sat":"rich","panel.light":"pale","stage":"slate","accent":"cyan","outline":"none","texture":"scanlines","texStrength":"subtle","sheen":"soft","cap":"graphite","skirt":"knurled","pointer":"line","pointerColor":"family","scale":"ticks","font":"barlowSC","weight":"700","case":"upper","tracking":"normal","labelColor":"familyDark","nameplate":"black"}, j: {"h":[10.917,-10.665,2.294,0.226,-2.808],"s":[0.004,0.043,-0.063,0.025,-0.062],"l":0.003,"p":0.005} },
+    day: { id: '3w46slf', home: true, name: 'Favourite 17 tuned 2', f: {"hue.feedback":"red","hue.chroma":"lime","hue.transform":"violet","hue.color":"amber","hue.layers":"blue","panel.sat":"rich","panel.light":"pale","stage":"light","accent":"cyan","outline":"family","texture":"hatch","texStrength":"subtle","sheen":"soft","cap":"graphite","skirt":"knurled","pointer":"line","pointerColor":"family","scale":"ticks","font":"sairaC","weight":"700","case":"upper","tracking":"tight","labelColor":"familyDark","nameplate":"ink"}, j: {"h":[9.091,-8.965,-9.177,-3.191,-5.68],"s":[0.036,-0.034,-0.051,0.053,0.086],"l":-0.006,"p":-0.001} }
+  };
+  var SHIPPED = BUILTIN.night;
   // A design's style: from its raw parameters (the shipped scheme) or its features + jitter, then any overrides (o):
   // exact style values set at home base, e.g. { "pLight": 0.3, "hue": [40, 125, 168, 305, 168] }.
   function resolve(sc) {
@@ -310,11 +319,17 @@
     DIMS.forEach(function (d) { p[d.k] = { active: d.init.slice(), retired: [], reserve: shuffle(d.reserve.slice()), fresh: [], retest: [] }; });
     return p;
   }
-  function fresh() { return { v: 1, open: false, tab: 'rate', round: 0, cands: [], sel: 0, fsel: -1, recs: [], pools: initPools(), folder: [], adopted: null, seen: {}, log: [], meta: [] }; }
+  function fresh() { return { v: 1, open: false, tab: 'rate', round: 0, cands: [], sel: 0, fsel: -1, recs: [], pools: initPools(), folder: [], mode: 'night', looks: { night: null, day: null }, seen: {}, log: [], meta: [] }; }
   function load() {
     try { S = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { S = null; }
     if (!S || S.v !== 1) S = fresh();
+    // Day / night schemes (2026-10-16): each scheme keeps its own adopted look. A look adopted before then is dropped
+    // so the new standard (Favourite 6 tuned) shows.
+    if (!S.looks) S.looks = { night: null, day: null };
+    delete S.adopted;
+    if (S.mode !== 'day') S.mode = 'night';
   }
+  function look() { return S.looks[S.mode]; }
   var saveFailed = false, simulating = false;
   function save() {
     if (simulating) return;
@@ -551,7 +566,9 @@
     var tally = function (f) { DIMS.forEach(function (d) { counts[d.k][f[d.k]] = (counts[d.k][f[d.k]] || 0) + 1; }); };
     if (S.round === 1) {
       // First round: the current look as a reference, then every dimension's values dealt out evenly at random.
-      cands.push({ id: uid(), raw: clone(SHIPPED.raw), f: clone(SHIPPED.f), stars: 0, tag: 'current' });
+      var cur = look() || BUILTIN[S.mode], c0 = { id: uid(), f: clone(cur.f), stars: 0, tag: 'current' };
+      if (cur.raw) c0.raw = clone(cur.raw); else c0.j = clone(cur.j || { h: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], l: 0, p: 0 });
+      cands.push(c0);
       var deal = {};
       DIMS.forEach(function (d) { var a = []; while (a.length < ROUND) a = a.concat(shuffle(S.pools[d.k].active.slice())); deal[d.k] = a; });
       for (var k = 1; k < ROUND; k++) {
@@ -661,7 +678,7 @@
     S.folder.push({ id: c.id, sc: sc, round: S.round, letter: String.fromCharCode(65 + S.cands.indexOf(c)), t: Date.now() });
   }
   function select(i) { S.sel = (i + ROUND) % ROUND; selT = Date.now(); save(); apply(); render(); }
-  function adopt(sc) { S.adopted = clone(sc); save(); apply(); flashMsg('Adopted. This is now the app\'s look' + (sc.home ? ' (and follows edits made at home base).' : '.')); }
+  function adopt(sc) { S.looks[S.mode] = clone(sc); save(); apply(); flashMsg('Adopted as the ' + S.mode + ' look' + (sc.home ? ' (and follows edits made at home base).' : '.')); }
 
   // ---------------------------------------------------------------- home base favourites
   // favorites/favorites.json in the repo (deployed with the site): designs sent from a device with "Send to home
@@ -753,7 +770,7 @@
       if (S.tab === 'folder' && fi) return fi.sc;
       if (S.tab !== 'folder' && S.cands[S.sel]) return S.cands[S.sel];
     }
-    return S.adopted || SHIPPED;
+    return look() || BUILTIN[S.mode];
   }
   function apply() { applyStyle(shown()); }
 
@@ -1091,10 +1108,11 @@
   }
   function folderHtml() {
     var fi = selItem(), sel = fi && fi.item, h = '';
-    h += '<div class="row"><button data-act="adopt"' + (fi ? '' : ' disabled') + '>Adopt</button><button data-act="tune"' + (fi ? '' : ' disabled') + '>Tune…</button><button data-act="fremove"' + (fi && !fi.home ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (S.adopted ? '' : ' disabled') + ' title="Back to the built-in look">Built-in</button></div>';
-    h += '<div class="row"><button data-act="send" class="on"' + (S.folder.length ? '' : ' disabled') + '>Send to home base</button><button data-act="savedisk"' + (S.folder.length ? '' : ' disabled') + '>Save folder…</button><button data-act="exportadopted"' + (S.adopted ? '' : ' disabled') + '>Export adopted</button></div>';
+    h += '<div class="row"><button data-act="adopt"' + (fi ? '' : ' disabled') + '>Adopt</button><button data-act="tune"' + (fi ? '' : ' disabled') + '>Tune…</button><button data-act="fremove"' + (fi && !fi.home ? '' : ' disabled') + '>Remove</button><button data-act="builtin"' + (look() ? '' : ' disabled') + ' title="Back to the standard ' + S.mode + ' look">Standard</button></div>';
+    h += '<div class="row"><button data-act="send" class="on"' + (S.folder.length ? '' : ' disabled') + '>Send to home base</button><button data-act="savedisk"' + (S.folder.length ? '' : ' disabled') + '>Save folder…</button><button data-act="exportadopted"' + (look() ? '' : ' disabled') + '>Export adopted</button></div>';
     if (copyBox) h += '<textarea readonly style="width:100%;height:70px;box-sizing:border-box;font:10px monospace;background:#0b0b0c;color:#c9c6d0;border:1px solid #3d3b40;border-radius:4px">' + esc(copyBox) + '</textarea>';
-    h += '<div class="meta">Adopted: ' + esc(S.adopted ? (S.adopted.home && homeById(S.adopted.id) ? homeById(S.adopted.id).name : S.adopted.name || 'design ' + S.adopted.id) : 'built-in look') + '</div>';
+    var lk = look(), lkName = function (sc) { return sc.home && homeById(sc.id) ? homeById(sc.id).name : sc.name || 'design ' + sc.id; };
+    h += '<div class="meta">' + (S.mode === 'day' ? 'Day' : 'Night') + ' look: ' + esc(lk ? lkName(lk) + ' (adopted)' : lkName(BUILTIN[S.mode]) + ' (standard)') + '</div>';
     if (sel) {
       h += '<div class="feat" style="margin-top:4px"><b>' + esc(fi.home ? sel.name : itemName(sel)) + '</b>' + (sel.from ? ' ' + esc(sel.from) : '') +
         (fi.home && sel.edited ? ' · edited at home base' : '') + (fi.home && sel.note ? '<br>' + esc(sel.note) : '') + '<br>' + featSummary(sel.sc.f) + '</div>';
@@ -1150,15 +1168,15 @@
     if (a === 'adopt') { var fi = selItem(); if (fi) adopt(fi.sc); return render(); }
     if (a === 'fremove') { var fr = selItem(); if (fr && !fr.home) { S.folder.splice(fr.i, 1); S.fsel = ''; save(); apply(); } return render(); }
     if (a === 'send') return sendHome();
-    if (a === 'builtin') { S.adopted = null; save(); apply(); return flashMsg('Back to the built-in look.'); }
+    if (a === 'builtin') { S.looks[S.mode] = null; save(); apply(); return flashMsg('Back to the standard ' + S.mode + ' look.'); }
     if (a === 'savedisk') return saveFolderToDisk();
     if (a === 'fjson') return download('five-star-designs.json', JSON.stringify(S.folder.map(designRecord), null, 1));
-    if (a === 'exportadopted') return download('adopted-style.json', JSON.stringify({ scheme: S.adopted, style: resolve(S.adopted) }, null, 1));
+    if (a === 'exportadopted') return download('adopted-style.json', JSON.stringify({ scheme: look(), style: resolve(look()) }, null, 1));
     if (a === 'csv') return exportCsv();
     if (a === 'json') return download('style-lab-data.json', JSON.stringify(S));
     if (a === 'reset') {
-      if (!window.confirm('Reset the Style Lab? All ratings, rounds and the 5★ folder are deleted (export them first). The adopted look stays.')) return;
-      var keep = S.adopted; S = fresh(); S.adopted = keep; S.open = true; nextRound(true); save(); apply(); return render();
+      if (!window.confirm('Reset the Style Lab? All ratings, rounds and the 5★ folder are deleted (export them first). The adopted day and night looks stay.')) return;
+      var keep = S.looks, km = S.mode; S = fresh(); S.looks = keep; S.mode = km; S.open = true; nextRound(true); save(); apply(); return render();
     }
   });
   [hud, tw].forEach(function (win) {   // drag by the title bar; both windows share one position
@@ -1192,6 +1210,11 @@
 
   // ---------------------------------------------------------------- start
   load();
+  scheme = S.mode;   // script.js's Night / Day key
+  window.onSchemeChange = function (m) {
+    S.mode = m === 'day' ? 'day' : 'night'; save(); apply(); render();
+    if (S.open) flashMsg((S.mode === 'day' ? 'Day' : 'Night') + ' scheme: adopting now sets the ' + S.mode + ' look.');
+  };
   var hp = {};
   location.hash.slice(1).split('&').forEach(function (kv) { var p = kv.split('='); hp[p[0]] = p[1] == null ? true : p[1]; });
   if (hp.labfresh) { S = fresh(); save(); }
@@ -1199,10 +1222,12 @@
   if (S.open && !S.round) nextRound(true);
   if (S.open) Object.keys(FONTS).forEach(loadFont);
   loadHome().then(function () {
-    if (S.adopted && S.adopted.home) {
-      var d = homeById(S.adopted.id);
-      if (d && JSON.stringify(d.sc) !== JSON.stringify(S.adopted)) { S.adopted = clone(d.sc); save(); }
-    }
+    ['night', 'day'].forEach(function (m) {
+      var b = homeById(BUILTIN[m].id);   // the standard looks follow edits at home base too
+      if (b) BUILTIN[m] = Object.assign(clone(b.sc), { name: b.name });
+      var lk = S.looks[m], d = lk && lk.home ? homeById(lk.id) : null;
+      if (d && JSON.stringify(d.sc) !== JSON.stringify(lk)) { S.looks[m] = clone(d.sc); save(); }
+    });
     if (hp.fav) previewFav = homeById(decodeURIComponent(hp.fav));
     if (hp.tune) { S.open = true; if (!S.round) nextRound(true); S.tab = 'folder'; S.fsel = decodeURIComponent(hp.tune); openTune(); placeHud(); }
     apply(); render();
@@ -1244,9 +1269,9 @@
   }
   window.__lab = { state: function () { return S; }, rate: rate, nextRound: nextRound, select: select, toggle: toggle, insights: insights, simulate: simulate,
     openTune: function (k) { S.fsel = k; openTune(); }, tuneCycle: tuneCycle, tuneGroup: tuneGroup, tuneShuffle: tuneShuffle, tuneSave: tuneSave,
-    styleCss: function (sc) { return styleCss(resolve(sc || SHIPPED)); }, shipped: SHIPPED, home: HOME, homeExport: homeExport, resolve: resolve, derive: function (sc) { return derive(resolve(sc), sc.f); } };
+    styleCss: function (sc) { return styleCss(resolve(sc || SHIPPED)); }, shipped: SHIPPED, builtin: BUILTIN, original: ORIGINAL, home: HOME, homeExport: homeExport, resolve: resolve, derive: function (sc) { return derive(resolve(sc), sc.f); } };
   if (hp.labdemo) {   // index.html#labdemo=N: show N simulated rounds in the HUD (nothing is saved)
-    var real = S; simulate(+hp.labdemo || 8, true); simulating = true; S.open = true; S.adopted = real.adopted; apply(); render();
+    var real = S; simulate(+hp.labdemo || 8, true); simulating = true; S.open = true; S.looks = real.looks; S.mode = real.mode; apply(); render();
   }
   if (hp.labsim) {
     var rep = document.getElementById('__report');
