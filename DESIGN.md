@@ -817,3 +817,31 @@ labels fit their keys in both layouts.
   styling is CSS from `schemeCss` in `lab.js` on keys marked `hk` by `makeKeys`.
 - **Day bezel:** in the day scheme the ridge around the output is slate (the night background colour).
 Checked in headless Chrome at 900 x 1340 and 1340 x 910: both schemes, key colours, Freeze on, Capture red.
+
+## 21. Knob ranges, presets window (2026-10-16)
+**Knobs** (`PD` in `script.js`):
+- Blend Mode has five positions, Darken · Mix · Add · Mult · Diff (Darken keeps the darker of the feedback and the
+  fresh image, by Persistence), with a 90 px drag for the full sweep (was 220) so it turns faster. The legend sits left
+  of, centred above and right of the ring.
+- Exponential tapers (`exp` in `PD`, `taper` / `untaper`): Modulate gives half its travel to 0–0.12 (`exp: 4`),
+  Persistence half its travel to 0.92–1 (`exp: -5`); both step by 0.001.
+- Ranges: Zoom 0.8–1.2× (2x), Rotate ±2 rad per frame (10x), Shift X / Y ±4% (2x), Hue Drift ±36° (2x), Saturation
+  0.67–1.33× (⅓), Brightness ±0.33 (⅓), Contrast 0–2× (2x).
+- Invert is removed (knob, uniform and shader step). Osc Speed became **Osc Size** (0.25–4×, log taper; the stripes
+  are 8 per screen at 1×); the oscillator's speed is fixed at its old default, 0.3.
+- Double-click returns a knob to zero (`zeroOf`): 0, or no effect where 0 isn't neutral (1× for Zoom, Contrast,
+  Saturation and Osc Size; Mix for Blend Mode); the minimum where 0 is out of range (Softness, Noise Scale, Shape Sides).
+- Chromakey's key has no label: it reads ON / OFF and glows in the accent colour while on.
+- Camera: a tall On key on the left, Back over Front on the right.
+- In landscape the Feedback window's first column shifts 24 px right so the legend clears the window edge.
+**Header keys:** Day/Night, Full, Freeze, Presets, Record. Full's label sits in segmented corner brackets; Freeze has
+blue text while off.
+**Presets** replace Save / Recall: a list (localStorage `vfv-presets-v1`, newest first, up to 24) of every knob, the
+mixer and Chromakey on/off, each with a 120 px JPEG of the output when saved. The Presets key opens a translucent,
+blurred window over the output (inside the screen, below the Lab key); tap a card to recall it (it stays outlined),
+× on a card to delete it, × in the corner or Escape to close. While the window is open the key reads **Save** and adds
+a preset ("Preset N"). The old single slot (`vfv-preset-v1`) is carried over once as Preset 1, its Blend Mode number
+shifted for Darken.
+Tested in headless Chrome at 900 x 1340 and 1340 x 910: taper midpoints (Modulate 0.119, Persistence 0.924 at half
+travel), double-click zero on every knob, Chromakey ON/OFF and glow, presets save (with picture) / recall / window in
+both schemes and layouts, no console errors.

@@ -53,21 +53,28 @@ function hideTip() { tip.style.display = 'none'; }
 var tipTimer = 0;
 function flashTip(target, text) { showTip(target, text); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 2200); }
 
-// Value <-> knob position (0..1), with optional log taper and a snap point (e.g. Zoom snaps to 1, Rotate to 0).
+// Value <-> knob position (0..1), with optional log taper, exponential taper (exp > 0 gives the low end more of the
+// travel, exp < 0 the high end) and a snap point (e.g. Zoom snaps to 1, Rotate to 0).
+function taper(d, u) { var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? (Math.exp(k * u) - 1) / e : 1 - (Math.exp(k * (1 - u)) - 1) / e; }
+function untaper(d, f) { var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? Math.log(1 + f * e) / k : 1 - Math.log(1 + (1 - f) * e) / k; }
 function toV(d, x) {
   if (d.log) return Math.log(x / d.min) / Math.log(d.max / d.min);
-  return clamp((x - d.min) / (d.max - d.min));
+  var f = clamp((x - d.min) / (d.max - d.min));
+  return d.exp ? untaper(d, f) : f;
 }
+// The value a double-click returns a knob to: 0, or no effect where 0 isn't the neutral value (1x for Zoom, Contrast,
+// Saturation and Osc Size; Mix for Blend Mode); the knob's minimum where 0 is out of range.
+function zeroOf(d) { return d.zero != null ? d.zero : d.snap != null ? d.snap : clamp(0, d.min, d.max); }
 function fromV(d, v) {
   v = clamp(v);
-  var x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + v * (d.max - d.min);
+  var x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp ? taper(d, v) : v) * (d.max - d.min);
   if (d.step) x = +(Math.round(x / d.step) * d.step).toFixed(6);
   if (d.snap != null && Math.abs(x - d.snap) < 0.015 * (d.max - d.min)) x = d.snap;
   return clamp(x, d.min, d.max);
 }
 var steps = function (d) { var n = d.step ? Math.round((d.max - d.min) / d.step) + 1 : 0; return n && n <= 61 ? n : 0; };
 
-// Vertical drag (Shift = fine), wheel, double-click = default.
+// Vertical drag (Shift = fine), wheel, double-click = zero (ctl.def).
 function dragValue(target, ctl, range) {
   target.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
@@ -131,7 +138,8 @@ function scaleCss(n) {
     '-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 6px),#000 calc(100% - 5px)),conic-gradient(from -137deg,#000 0deg 274deg,transparent 274deg);-webkit-mask-composite:source-in;' +
     'mask:radial-gradient(closest-side,transparent calc(100% - 6px),#000 calc(100% - 5px)),conic-gradient(from -137deg,#000 0deg 274deg,transparent 274deg);mask-composite:intersect;pointer-events:none';
 }
-// MS-20 knob centred on (x, y) bound to params[key] through definition PD[key]. o: fs, ticks, after, fam.
+// MS-20 knob centred on (x, y) bound to params[key] through definition PD[key]. o: fs, ticks, after, fam, range (px of
+// drag for the full sweep).
 // Parts carry knob-* classes (and the wrap data-fam) so design-mode colour schemes can restyle them.
 var syncers = [];
 function knob(x, y, size, label, key, o) {
@@ -150,14 +158,14 @@ function knob(x, y, size, label, key, o) {
   var lab = el('span', (UL > 1 ? 'margin-top:3px;line-height:1;' : 'margin-top:5px;') + 'font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap', wrap, label);
   lab.className = 'knob-label';
   var k = {
-    v: 0, R: R, steps: steps(d), def: toV(d, d.def),
+    v: 0, R: R, steps: steps(d), def: toV(d, zeroOf(d)),
     text: function () { return label + '  ' + d.f(params[key]); },
     show: function (v) { k.v = v; ptr.style.transform = 'rotate(' + (-135 + v * 270) + 'deg)'; ring.setAttribute('aria-valuetext', d.f(params[key])); },
     set: function (v) { var x = fromV(d, v); params[key] = x; k.show(k.steps ? toV(d, x) : clamp(v)); if (o.after) o.after(x); },
     sync: function () { k.show(toV(d, params[key])); ring.setAttribute('aria-label', label); if (o.after) o.after(params[key]); }
   };
   k.sync();
-  dragValue(ring, k, 220);
+  dragValue(ring, k, o.range || 220);
   ring.addEventListener('keydown', function (e) {
     var st = k.steps ? 1 / (k.steps - 1) : 0.01;
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { k.set(clamp(k.v + st)); e.preventDefault(); }
@@ -218,28 +226,28 @@ function syncUI() { syncers.forEach(function (s) { s(); }); }
 // 2. Parameter definitions + state
 // -------------------------------------------------------------
 var RING_SIZE = 32; // feedback history slots (see section 4); Delay reaches RING_SIZE - 2 frames back
-var BLEND_NAMES = ['Mix', 'Add', 'Mult', 'Diff'];
+var BLEND_NAMES = ['Darken', 'Mix', 'Add', 'Mult', 'Diff'];
 var sgn = function (v, n) { return (v > 0 ? '+' : '') + v.toFixed(n); };
 var deg = function (v) { return Math.round(v) + '°'; };
 var pct = function (v) { return Math.round(v * 100) + '%'; };
+// def: the starting value; zero: where a double-click returns the knob (see zeroOf); exp, log, snap: see toV / fromV.
 var PD = {
   // Feedback
-  blendMode: { min: 0, max: 3, def: 0, step: 1, f: function (v) { return BLEND_NAMES[v]; } },
-  modulateAmount: { min: 0, max: 1, def: 0.15, step: 0.005, f: function (v) { return v < 0.005 ? 'Off' : v.toFixed(3); } },
-  feedback: { min: 0, max: 1, def: 0.94, step: 0.005, f: function (v) { return v.toFixed(3); } },
+  blendMode: { min: 0, max: 4, def: 1, zero: 1, step: 1, f: function (v) { return BLEND_NAMES[v]; } },
+  modulateAmount: { min: 0, max: 1, def: 0.15, step: 0.001, exp: 4, f: function (v) { return v < 0.0005 ? 'Off' : v.toFixed(3); } },   // half the travel below 0.12
+  feedback: { min: 0, max: 1, def: 0.94, step: 0.001, exp: -5, f: function (v) { return v.toFixed(3); } },   // half the travel above 0.92
   delay: { min: 0, max: RING_SIZE - 2, def: 0, step: 1, f: function (v) { return v < 0.5 ? 'Live' : v + (v === 1 ? ' frame' : ' frames'); } },
   // Transform (per frame)
-  zoom: { min: 0.9, max: 1.1, def: 1.012, step: 0.001, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
-  rotate: { min: -0.2, max: 0.2, def: 0.012, step: 0.001, snap: 0, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
-  translateX: { min: -0.02, max: 0.02, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
-  translateY: { min: -0.02, max: 0.02, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
-  hueDrift: { min: -0.05, max: 0.05, def: 0.01, step: 0.001, snap: 0, f: function (v) { return sgn(v * 360, 1) + '°'; } },
+  zoom: { min: 0.8, max: 1.2, def: 1.012, step: 0.001, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
+  rotate: { min: -2, max: 2, def: 0.012, step: 0.001, snap: 0, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
+  translateX: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
+  translateY: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
+  hueDrift: { min: -0.1, max: 0.1, def: 0.01, step: 0.001, snap: 0, f: function (v) { return sgn(v * 360, 1) + '°'; } },
   // Color
   hue: { min: 0, max: 360, def: 0, step: 1, f: deg },
-  saturate: { min: 0, max: 2, def: 1.1, step: 0.01, f: function (v) { return v.toFixed(2) + '×'; } },
-  brightness: { min: -1, max: 1, def: 0, step: 0.01, snap: 0, f: function (v) { return sgn(v, 2); } },
-  contrast: { min: 0.5, max: 1.5, def: 1.03, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
-  invertAmount: { min: 0, max: 1, def: 0, step: 0.01, f: pct },
+  saturate: { min: 2 / 3, max: 4 / 3, def: 1.1, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
+  brightness: { min: -1 / 3, max: 1 / 3, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v, 2); } },
+  contrast: { min: 0, max: 2, def: 1.03, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
   // Chromakey (key colour as HSL)
   keyHue: { min: 0, max: 360, def: 120, step: 1, f: deg },
   keySat: { min: 0, max: 1, def: 1, step: 0.01, f: pct },
@@ -247,12 +255,12 @@ var PD = {
   chromakeyThreshold: { min: 0, max: 1.5, def: 0.4, step: 0.01, f: function (v) { return v.toFixed(2); } },
   chromakeySoftness: { min: 0.001, max: 0.5, def: 0.15, step: 0.001, f: function (v) { return v.toFixed(3); } },
   // Layers
-  speed: { min: -2, max: 2, def: 0.3, step: 0.01, snap: 0, f: function (v) { return sgn(v, 2); } },
+  oscSize: { min: 0.25, max: 4, def: 1, log: true, step: 0.01, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },   // band width (8 bands at 1x)
   noiseScale: { min: 0.5, max: 20, def: 4, step: 0.1, f: function (v) { return v.toFixed(1); } },
   shapeSides: { min: 3, max: 12, def: 5, step: 1, f: function (v) { return v + ' sides'; } }
 };
 // Fixed generator settings that no longer have knobs.
-var FIXED = { frequency: 8, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
+var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
 var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
@@ -301,21 +309,21 @@ function LABEL() { return 'font-size:' + 10 * UL + 'px;font-weight:700;letter-sp
 
 // Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
 var CONTROLS = {
-  blendMode: ['Blend Mode', { ticks: 4, after: function () { syncBlendLegend(); }, legend: true }],
+  blendMode: ['Blend Mode', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: true }],   // a short drag per position
   modulateAmount: ['Modulate'], feedback: ['Persistence'], delay: ['Delay'],
-  keyOn: ['Enable'], keyHue: ['Key Hue', { after: function () { syncKeySwatch(); } }],
+  keyOn: [''], keyHue: ['Key Hue', { after: function () { syncKeySwatch(); } }],
   keySat: ['Key Sat', { after: function () { syncKeySwatch(); } }], keyLight: ['Key Light', { after: function () { syncKeySwatch(); } }],
   chromakeyThreshold: ['Threshold'], chromakeySoftness: ['Softness'],
   zoom: ['Zoom'], rotate: ['Rotate'], translateX: ['Shift X'], translateY: ['Shift Y'], hueDrift: ['Hue Drift'],
-  hue: ['Hue'], saturate: ['Saturation'], brightness: ['Brightness'], contrast: ['Contrast'], invertAmount: ['Invert'],
-  camera: ['Camera'], speed: ['Osc Speed'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }]
+  hue: ['Hue'], saturate: ['Saturation'], brightness: ['Brightness'], contrast: ['Contrast'],
+  camera: ['Camera'], oscSize: ['Osc Size'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }]
 };
 var SECTIONS = {
   feedback: { title: 'Feedback', items: ['blendMode', 'modulateAmount', 'feedback', 'delay'] },
   chroma: { title: 'Chromakey', items: ['keyOn', 'keyHue', 'keySat', 'keyLight', 'chromakeyThreshold', 'chromakeySoftness'] },
   transform: { title: 'Transform', items: ['zoom', 'rotate', 'translateX', 'translateY', 'hueDrift'] },
-  color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast', 'invertAmount'] },
-  layers: { title: 'Layers', items: ['camera', 'speed', 'noiseScale', 'shapeSides'] },
+  color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast'] },
+  layers: { title: 'Layers', items: ['camera', 'oscSize', 'noiseScale', 'shapeSides'] },
   mix: { title: 'Mix', items: [] }
 };
 
@@ -334,11 +342,12 @@ function makeScreen(x, y, w, h) {
   if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys: Day/Night, Full, Freeze, Save, Recall, Record (Capture while frozen) in the NKEYS rects [x, y, w, h].
+// Header keys: Day/Night, Full, Freeze, Presets (Save while the presets window is open), Record (Capture while frozen)
+// in the NKEYS rects [x, y, w, h].
 // The label size shrinks from fs if the longest label the keys can show would not fit the key width. Class hk marks
 // them for the Style Lab, which colours them to the background (the Day/Night key in the other scheme's colours, the
 // Record key red).
-var NKEYS = 6, KEY_LABELS = ['Night', 'Day', 'Full', 'Freeze', 'Save', 'Recall', 'Record', 'Capture', 'Stop', 'Saving'];
+var NKEYS = 5, KEY_LABELS = ['Night', 'Day', 'Full', 'Freeze', 'Presets', 'Save', 'Record', 'Capture', 'Stop', 'Saving'];
 function makeKeys(r, fs) {
   fs = fs || 10;
   var widest = Math.max.apply(null, KEY_LABELS.map(function (t) { return textW(t.toUpperCase(), fs, 700, 0.08); }));
@@ -347,25 +356,28 @@ function makeKeys(r, fs) {
   ui.scheme = K(0, 'Day', null, { aria: 'Day / night colour scheme', onClick: toggleScheme }, 'hk-scheme');
   ui.full = K(1, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
   ui.freeze = K(2, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
-  ui.save = K(3, 'Save', null, { aria: 'Save preset (every knob, the mixer and Chromakey on/off)', onClick: savePreset });
-  ui.recall = K(4, 'Recall', null, { aria: 'Recall the saved preset', onClick: recallPreset });
-  ui.rec = K(5, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
-  ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncScheme(); syncRec();
+  ui.presets = K(3, 'Presets', null, { aria: 'Presets', onClick: presetsKey });
+  ui.rec = K(4, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
+  // Full: the label inside segmented corner brackets, like a fullscreen glyph.
+  var bl = Math.round(fs * 0.5) + 'px', bt = Math.max(1.5, Math.round(fs * 0.12 * 2) / 2) + 'px', bg = 'linear-gradient(currentColor,currentColor) ';
+  ui.full.txt.style.cssText = 'padding:' + Math.round(fs * 0.25) + 'px ' + Math.round(fs * 0.45) + 'px;line-height:1;background:' +
+    ['left top', 'right top', 'left bottom', 'right bottom'].map(function (p) { return bg + p + '/' + bl + ' ' + bt + ' no-repeat,' + bg + p + '/' + bt + ' ' + bl + ' no-repeat'; }).join(',');
+  ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncScheme(); syncRec(); syncPresetsKey(); renderPresets();
 }
-// Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
+// Camera cluster centred on (cx, cy): a tall On key on the left, Back over Front on the right, label below.
 function makeCamera(cx, cy, fam) {
-  var k = UK, bw = 104 * k, bx = cx - bw / 2;
-  ui.camOn = key(bx, cy - 34 * k, bw, 26 * k, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
+  var k = UK, bw = 104 * k, g = 4 * k, cw = (bw - g) / 2, top = cy - 30 * k, h = 52 * k, hh = (h - g) / 2, bx = cx - bw / 2;
+  ui.camOn = key(bx, top, cw, h, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
   ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + i * (bw / 2 + 2), cy - 2 * k, bw / 2 - 2, 22 * k, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+    return key(bx + cw + g, i ? top : top + hh + g, cw, hh, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
   });
   var lab = cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
   syncCam();
 }
-// Chromakey On key centred on (cx, cy), label where a knob of size ks would put it.
+// Chromakey On / Off key centred on (cx, cy), no label: the key names the state and glows softly while on.
 function makeChromaOn(cx, cy, ks, fam) {
-  ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'On', 'off', { aria: 'Chromakey on', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  var lab = cl(cx, cy + ks / 2 + (UL > 1 ? 13 : 15), 120 * UL, 'Enable', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
+  ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'Off', null, { aria: 'Chromakey', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
+  ui.keyOn.shadow = ui.keyOn.b.style.boxShadow;
   syncers.push(syncKeyOn);
   syncKeyOn();
 }
@@ -421,13 +433,13 @@ function buildPortraitPanel() {
   var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG;
   secBox(lay, 'Layers', 'layers');
   makePad(M + LW - PG - pad, ly + PG, pad);
-  gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'speed'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
+  gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'oscSize'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
 
   // Right column: one vertical gap g shared by every window.
   var wins = [['feedback', [['blendMode', 'modulateAmount'], ['feedback', 'delay']]],
               ['chroma', [['keyOn', 'keyHue'], ['keySat', 'keyLight'], ['chromakeyThreshold', 'chromakeySoftness']]],
               ['transform', [['zoom'], ['rotate'], ['translateX'], ['translateY'], ['hueDrift']]],
-              ['color', [['hue'], ['saturate'], ['brightness'], ['contrast'], ['invertAmount']]]];
+              ['color', [['hue'], ['saturate'], ['brightness'], ['contrast']]]];
   var hs = wins.map(function (w) { return gridSize(w[1], ks); });
   var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc], sep = PG + tab;
   var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
@@ -462,12 +474,16 @@ function textW(t, px, weight, ls) {
 // A control's extent around its centre: width, and height above (top) and below (bot), label included.
 function itemExt(id, ks) {
   var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
-  if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 34 * UK, bot: 35 + 20 * (UK - 1) + lab };
-  if (id === 'keyOn') return { w: Math.max(72 * UK, lw('Enable')), top: 14 * UK, bot: ks / 2 + 13 + lab };
+  if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 30 * UK, bot: 35 + 20 * (UK - 1) + lab };
+  if (id === 'keyOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
   var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab };
   if (id === 'blendMode') {   // the legend around the ring
-    var d = (R + 7 * UK) * Math.SQRT1_2, name = Math.max.apply(null, BLEND_NAMES.map(function (n) { return textW(n, 9 * UL, 800, 0.12); }));
-    e.w = Math.max(e.w, 2 * (d + name)); e.top = d + 6 * UL;
+    var r = R + 7 * UK, bh = 12 * UL;
+    BLEND_NAMES.forEach(function (n, i) {
+      var a = blendAngle(i) * Math.PI / 180, nw = textW(n, 9 * UL, 800, 0.12), side = Math.abs(Math.sin(a)) > 0.01;
+      e.w = Math.max(e.w, 2 * (side ? Math.abs(r * Math.sin(a)) + nw : nw / 2));
+      e.top = Math.max(e.top, side ? r * Math.cos(a) + bh / 2 : r + bh);
+    });
   }
   return e;
 }
@@ -517,7 +533,7 @@ function buildLayers() {
   var x = M, w = 278, top = LOW_Y + 20;
   secBox(box(x, LOW_Y, LW, LOW_B - LOW_Y), 'Layers', 'layers');
   var cx = [x + w / 4, x + 3 * w / 4], cy = [top + PAD / 4, top + 3 * PAD / 4];
-  [['camera', 0, 0], ['speed', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
+  [['camera', 0, 0], ['oscSize', 1, 0], ['noiseScale', 0, 1], ['shapeSides', 1, 1]].forEach(function (d) {
     var p = pt(cx[d[1]], cy[d[2]]); makeItem(d[0], p[0], p[1], 40, { fam: 'layers' });
   });
 }
@@ -633,7 +649,9 @@ function buildRight() {
   secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Color', 'color');
   var place = function (fam, cols, row0) {
     SECTIONS[fam].items.forEach(function (id, i) {
-      var p = pt(cols[i % cols.length], cy(row0 + Math.floor(i / cols.length))); makeItem(id, p[0], p[1], ks, { fam: fam });
+      var p = pt(cols[i % cols.length], cy(row0 + Math.floor(i / cols.length)));
+      if (LAND && fam === 'feedback' && i < 2) p[0] += 24;   // room for the Blend Mode legend inside the window's left edge
+      makeItem(id, p[0], p[1], ks, { fam: fam });
     });
   };
   place('feedback', [c1, c2], 0);
@@ -642,19 +660,29 @@ function buildRight() {
   place('color', [c2], 5);
   makeSwatch(ck[0] + 116, ck[1] - 6);
 }
-function syncKeyOn() { if (ui.keyOn) ui.keyOn.set(params.chromakeyEnabled ? 'on' : 'off'); }
+function syncKeyOn() {
+  var k = ui.keyOn; if (!k) return;
+  var on = !!params.chromakeyEnabled;
+  k.txt.textContent = on ? 'On' : 'Off';
+  k.b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  k.b.style.boxShadow = on ? k.shadow + ',0 0 14px 2px ' + P.accentGlow : k.shadow;
+  k.txt.style.color = on ? P.accent : ''; k.txt.style.textShadow = on ? '0 0 7px ' + P.accentGlow : '';
+}
 function syncKeySwatch() {
   if (!ui.keySwatch) return;
   var c = hslToRgb(params.keyHue, params.keySat, params.keyLight);
   ui.keySwatch.style.background = 'rgb(' + c.map(function (v) { return Math.round(v * 255); }).join(',') + ')';
 }
-// Blend Mode positions printed around its knob like a rotary switch; tap a name to pick it.
+// Blend Mode positions printed around its knob like a rotary switch (left of the top, centred on it, right of it); tap
+// a name to pick it.
+function blendAngle(i) { return -135 + i * 270 / (BLEND_NAMES.length - 1); }
 function blendLegend(x, y, R) {
   ui.blendLabs = BLEND_NAMES.map(function (n, i) {
-    var a = (-135 + i * 90) * Math.PI / 180, r = R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a), left = i < 2;
-    var bw = 40 * UL, bh = 12 * UL;
-    var s = el('span', at(left ? lx - bw : lx, ly - bh / 2, bw, bh) + ';text-align:' + (left ? 'right' : 'left') + ';' + PRINT(9 * UL) + ';cursor:pointer', panel, n);
-    s.addEventListener('click', function () { ui.blend.set(i / 3); });
+    var deg = blendAngle(i), a = deg * Math.PI / 180, r = R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a);
+    var bw = 46 * UL, bh = 12 * UL, side = Math.abs(deg) < 1 ? 0 : deg < 0 ? -1 : 1;
+    var s = el('span', at(side < 0 ? lx - bw : side > 0 ? lx : lx - bw / 2, side ? ly - bh / 2 : ly - bh, bw, bh) + ';text-align:' +
+      (side < 0 ? 'right' : side > 0 ? 'left' : 'center') + ';' + PRINT(9 * UL) + ';cursor:pointer', panel, n);
+    s.addEventListener('click', function () { ui.blend.set(i / (BLEND_NAMES.length - 1)); });
     return s;
   });
   syncBlendLegend();
@@ -864,7 +892,6 @@ uniform float u_hue;
 uniform float u_saturate;
 uniform float u_brightness;
 uniform float u_contrast;
-uniform float u_invertAmount;
 
 // chromakey
 uniform float u_chromakeyEnabled;
@@ -873,7 +900,7 @@ uniform float u_chromakeyThreshold;
 uniform float u_chromakeySoftness;
 
 // blend
-uniform int   u_blendMode; // 0 mix, 1 add, 2 mult, 3 diff
+uniform int   u_blendMode; // 0 darken, 1 mix, 2 add, 3 mult, 4 diff
 uniform float u_modulateAmount;
 
 in vec2 v_uv;
@@ -928,14 +955,13 @@ vec3 brightnessColor(vec3 c, float amount) { return c + amount; }
 
 vec3 contrastColor(vec3 c, float amount) { return (c - 0.5) * amount + 0.5; }
 
-vec3 invertColor(vec3 c, float amount) { return (1.0 - c) * amount + c * (1.0 - amount); }
-
 vec2 modulateUV(vec2 st, vec4 b, float amount) { return st + b.xy * amount; }
 
 vec4 blendFn(vec4 prev, vec4 gen, int mode, float feedback) {
-  if (mode == 1) return vec4(prev.rgb * feedback + gen.rgb, 1.0);
-  if (mode == 2) return vec4(mix(gen.rgb, prev.rgb * gen.rgb, feedback), 1.0);
-  if (mode == 3) return vec4(mix(gen.rgb, abs(prev.rgb - gen.rgb), feedback), 1.0);
+  if (mode == 0) return vec4(mix(gen.rgb, min(prev.rgb, gen.rgb), feedback), 1.0);
+  if (mode == 2) return vec4(prev.rgb * feedback + gen.rgb, 1.0);
+  if (mode == 3) return vec4(mix(gen.rgb, prev.rgb * gen.rgb, feedback), 1.0);
+  if (mode == 4) return vec4(mix(gen.rgb, abs(prev.rgb - gen.rgb), feedback), 1.0);
   return vec4(mix(gen.rgb, prev.rgb, feedback), 1.0);
 }
 
@@ -1024,7 +1050,6 @@ void main() {
   result.rgb = saturateColor(result.rgb, u_saturate);
   result.rgb = brightnessColor(result.rgb, u_brightness);
   result.rgb = contrastColor(result.rgb, u_contrast);
-  result.rgb = invertColor(result.rgb, u_invertAmount);
   result.rgb = clamp(result.rgb, 0.0, 1.0);
   result.a = 1.0;
 
@@ -1046,7 +1071,7 @@ var FEEDBACK_UNIFORMS = [
   'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
   'u_mix', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
-  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_invertAmount',
+  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
   'u_blendMode', 'u_modulateAmount'
 ];
@@ -1154,8 +1179,8 @@ function uploadFeedbackUniforms(t) {
   gl.uniform2f(u.u_translate, params.translateX, params.translateY);
   gl.uniform1f(u.u_hueDrift, params.hueDrift);
   gl.uniform4f(u.u_mix, w[0], w[1], w[2], w[3]);
-  gl.uniform1f(u.u_frequency, FIXED.frequency);
-  gl.uniform1f(u.u_speed, params.speed);
+  gl.uniform1f(u.u_frequency, FIXED.frequency / params.oscSize);
+  gl.uniform1f(u.u_speed, FIXED.speed);
   gl.uniform1f(u.u_sync, FIXED.sync);
   gl.uniform1f(u.u_noiseSpeed, FIXED.noiseSpeed);
   gl.uniform1f(u.u_shapeSides, params.shapeSides);
@@ -1169,7 +1194,6 @@ function uploadFeedbackUniforms(t) {
   gl.uniform1f(u.u_saturate, params.saturate);
   gl.uniform1f(u.u_brightness, params.brightness);
   gl.uniform1f(u.u_contrast, params.contrast);
-  gl.uniform1f(u.u_invertAmount, params.invertAmount);
   gl.uniform1f(u.u_chromakeyEnabled, params.chromakeyEnabled ? 1 : 0);
   gl.uniform3f(u.u_chromakeyColor, key[0], key[1], key[2]);
   gl.uniform1f(u.u_chromakeyThreshold, params.chromakeyThreshold);
@@ -1291,24 +1315,106 @@ function toggleScheme() {
   if (window.onSchemeChange) window.onSchemeChange(scheme);
 }
 
-// Preset: one slot holding every knob, the mixer puck and Chromakey on/off, kept in
-// localStorage so it survives a reload. Camera on/off is left alone. Recall with nothing saved flashes the key.
-var PRESET_STORE = 'vfv-preset-v1';
-function savePreset() {
-  try { localStorage.setItem(PRESET_STORE, JSON.stringify({ v: 1, t: Date.now(), params: params })); }
-  catch (e) { flash(ui.save); flashTip(ui.save.b, 'Could not save'); return; }
-  ui.save.set('on'); setTimeout(function () { if (ui.save) ui.save.set(null); }, 400);
-  flashTip(ui.save.b, 'Preset saved');
+// Presets: saved states of every knob, the mixer and Chromakey on/off (camera on/off is left alone), each with a small
+// picture of the output when it was saved, kept in localStorage (newest first, up to PRESETS_MAX). The Presets key
+// opens a translucent window over the output listing them: tap one to recall it, × on a card to delete it, × in the
+// corner (or Escape) to close. While the window is open the key reads Save and saves the current state as a new preset.
+var PRESETS_STORE = 'vfv-presets-v1', PRESETS_MAX = 24, presetsOpen = false, presetsActive = '';
+function loadPresets() {
+  var list = null;
+  try { list = JSON.parse(localStorage.getItem(PRESETS_STORE) || 'null'); } catch (e) { list = null; }
+  if (Array.isArray(list)) return list;
+  list = [];
+  try {   // the single preset slot before 2026-10-16, whose Blend Mode numbers predate Darken
+    var old = JSON.parse(localStorage.getItem('vfv-preset-v1') || 'null');
+    if (old && old.params) {
+      var p = Object.assign({}, old.params);
+      if (typeof p.blendMode === 'number') p.blendMode += 1;
+      list.push({ id: 'p' + (old.t || 0).toString(36), name: 'Preset 1', t: old.t || Date.now(), params: p, thumb: '' });
+    }
+  } catch (e) { /* nothing to carry over */ }
+  return list;
 }
-function recallPreset() {
-  var p = null;
-  try { p = JSON.parse(localStorage.getItem(PRESET_STORE) || 'null'); } catch (e) { p = null; }
-  if (!p || !p.params) { flash(ui.recall); flashTip(ui.recall.b, 'No preset saved'); return; }
+function storePresets(list) { try { localStorage.setItem(PRESETS_STORE, JSON.stringify(list)); return true; } catch (e) { return false; } }
+// The output now, about 120 px on its long side. The drawing buffer isn't preserved, so draw and read in one task.
+function presetThumb() {
+  if (contextLost) return '';
+  renderDisplayPass();
+  var c = document.createElement('canvas'), k = 120 / Math.max(CW, CH);
+  c.width = Math.round(CW * k); c.height = Math.round(CH * k);
+  c.getContext('2d').drawImage(glCanvas, 0, 0, c.width, c.height);
+  try { return c.toDataURL('image/jpeg', 0.75); } catch (e) { return ''; }
+}
+function presetsKey() {
+  if (!presetsOpen) { presetsOpen = true; syncPresetsKey(); renderPresets(); return; }
+  savePresetNew();
+}
+function closePresets() { presetsOpen = false; syncPresetsKey(); renderPresets(); }
+function syncPresetsKey() {
+  if (!ui.presets) return;
+  ui.presets.txt.textContent = presetsOpen ? 'Save' : 'Presets';
+  ui.presets.b.setAttribute('aria-label', presetsOpen ? 'Save the current settings as a new preset' : 'Open presets');
+}
+function savePresetNew() {
+  var list = loadPresets();
+  if (list.length >= PRESETS_MAX) { flash(ui.presets); flashTip(ui.presets.b, 'Presets full: delete one first'); return; }
+  var n = list.reduce(function (m, p) { var d = /(\d+)$/.exec(p.name || ''); return Math.max(m, d ? +d[1] : 0); }, 0) + 1;
+  var p = { id: 'p' + Date.now().toString(36), name: 'Preset ' + n, t: Date.now(), params: Object.assign({}, params), thumb: presetThumb() };
+  list.unshift(p);
+  if (!storePresets(list)) { p.thumb = ''; if (!storePresets(list)) { flash(ui.presets); flashTip(ui.presets.b, 'Could not save'); return; } }
+  presetsActive = p.id;
+  flashTip(ui.presets.b, p.name + ' saved');
+  renderPresets();
+}
+function recallPresetById(id) {
+  var p = loadPresets().filter(function (x) { return x.id === id; })[0];
+  if (!p || !p.params) return;
   Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = p.params[k]; });
   syncUI();
-  ui.recall.set('on'); setTimeout(function () { if (ui.recall) ui.recall.set(null); }, 400);
-  flashTip(ui.recall.b, 'Preset recalled');
+  presetsActive = id;
+  renderPresets();
 }
+function deletePreset(id) {
+  var list = loadPresets(), p = list.filter(function (x) { return x.id === id; })[0];
+  if (!p || !window.confirm('Delete ' + p.name + '?')) return;
+  storePresets(list.filter(function (x) { return x.id !== id; }));
+  renderPresets();
+}
+// The window lives inside the screen (rebuilt with the panel), below the Lab key.
+function renderPresets() {
+  if (ui.presetWin) { ui.presetWin.remove(); ui.presetWin = null; }
+  if (!presetsOpen || !ui.screen) return;
+  var f = 11 * UL, list = loadPresets(), cols = LAND ? 4 : 3, top = 40 * UK;
+  var w = el('div', 'position:absolute;left:10px;right:10px;top:' + top + 'px;bottom:10px;z-index:3;display:flex;flex-direction:column;box-sizing:border-box;padding:' + f * 0.7 + 'px;' +
+    'border-radius:6px;background:rgba(12,12,15,0.58);-webkit-backdrop-filter:blur(7px) saturate(1.2);backdrop-filter:blur(7px) saturate(1.2);' +
+    'box-shadow:0 0 0 1px rgba(255,255,255,0.14),0 10px 30px rgba(0,0,0,0.45);color:#ebebeb;font-family:inherit', ui.screen);
+  w.className = 'presets'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Presets');
+  w.addEventListener('dblclick', function (e) { e.stopPropagation(); });   // the screen's double-click is fullscreen
+  ui.presetWin = w;
+  var hd = el('div', 'display:flex;align-items:center;gap:8px;margin-bottom:' + f * 0.6 + 'px', w);
+  el('span', 'flex:1;font-size:' + f * 1.1 + 'px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase', hd, 'Presets');
+  var x = el('button', 'font:inherit;font-size:' + f * 1.2 + 'px;line-height:1;color:#ebebeb;background:rgba(255,255,255,0.1);border:none;border-radius:4px;padding:' + f * 0.2 + 'px ' + f * 0.5 + 'px;cursor:pointer', hd, '×');
+  x.setAttribute('aria-label', 'Close presets'); x.addEventListener('click', closePresets);
+  var grid = el('div', 'flex:1;overflow:auto;display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:' + f * 0.6 + 'px;align-content:start', w);
+  if (!list.length) el('div', 'grid-column:1/-1;font-size:' + f + 'px;line-height:1.4;color:rgba(235,235,235,0.75);padding:' + f + 'px 2px', grid,
+    'No presets yet. Press Save (the key below the screen) to keep every knob, the mixer and Chromakey on/off as a preset.');
+  list.forEach(function (p) {
+    var on = p.id === presetsActive, d = new Date(p.t), z = function (v) { return (v < 10 ? '0' : '') + v; };
+    var card = el('div', 'position:relative;cursor:pointer;border-radius:4px;overflow:hidden;background:rgba(0,0,0,0.45);box-shadow:0 0 0 ' + (on ? '2px ' + P.accent + ',0 0 10px ' + P.accentGlow : '1px rgba(255,255,255,0.12)'), grid);
+    card.setAttribute('role', 'button'); card.setAttribute('aria-label', 'Recall ' + p.name); card.tabIndex = 0;
+    var pic = el('div', 'aspect-ratio:' + CW + '/' + CH + ';background:#000 center/cover no-repeat' + (p.thumb ? ' url(' + p.thumb + ')' : ''), card);
+    if (!p.thumb) pic.style.background = 'linear-gradient(135deg,#222026,#0b0b0c)';
+    var cap = el('div', 'padding:' + f * 0.3 + 'px ' + f * 0.4 + 'px;font-size:' + f * 0.85 + 'px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', card);
+    el('b', 'font-weight:800;letter-spacing:0.06em;text-transform:uppercase' + (on ? ';color:' + P.accent : ''), cap, p.name);
+    el('span', 'color:rgba(235,235,235,0.6);margin-left:6px', cap, z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()));
+    var del = el('button', 'position:absolute;right:3px;top:3px;font:inherit;font-size:' + f * 0.9 + 'px;line-height:1;color:#ebebeb;background:rgba(0,0,0,0.55);border:none;border-radius:3px;padding:2px ' + f * 0.35 + 'px;cursor:pointer', card, '×');
+    del.setAttribute('aria-label', 'Delete ' + p.name);
+    del.addEventListener('click', function (e) { e.stopPropagation(); deletePreset(p.id); });
+    card.addEventListener('click', function () { recallPresetById(p.id); });
+    card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recallPresetById(p.id); } });
+  });
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && presetsOpen && !pseudoFs) closePresets(); });
 
 // Fullscreen. The Fullscreen API where the browser allows it for elements (desktop, Android, iPad). iPhone Safari only
 // allows it for <video>, so there, or if the request is refused, the canvas moves into an overlay covering the page

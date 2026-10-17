@@ -765,8 +765,8 @@
     return fontLinks[k];
   }
   // The header keys take the background's colour, the Day/Night key the other scheme's (so it shows what it switches
-  // to); Freeze lights blue when on; Record / Capture is red with white text. In the day scheme the screen's bezel is
-  // slate.
+  // to); Freeze has blue text when off and lights blue when on; Record / Capture is red with white text. In the day
+  // scheme the screen's bezel is slate.
   function keyCss(sel, g) {
     var dark = g.sLight < 0.5, c = function (dl) { return hsl(g.sHue, g.sSat, cl(g.sLight + dl, 0, 0.98)); };
     return sel + '{background:linear-gradient(to bottom,' + (dark ? c(0.1) + ',' + c(0.05) + ' 55%,' + c(0.02) : c(0.07) + ',' + c(0.01) + ' 55%,' + c(-0.045)) + ')!important;' +
@@ -775,7 +775,8 @@
   }
   function schemeCss(st) {
     var om = S.mode === 'day' ? 'night' : 'day', css = keyCss('#stage .hk', st) + keyCss('#stage .hk.hk-scheme', resolve(S.looks[om] || BUILTIN[om]));
-    css += '#stage .hk.key-tint[aria-pressed="true"]{background:linear-gradient(to bottom,#5b8fe0,#3568b8)!important;color:#fff!important}\n';
+    css += '#stage .hk.key-tint[aria-pressed="true"]{background:linear-gradient(to bottom,#5b8fe0,#3568b8)!important;color:#fff!important}' +
+      '#stage .hk.key-tint:not([aria-pressed="true"]){color:' + (st.sLight < 0.5 ? '#86aaf5' : '#2f62c2') + '!important}\n';
     css += '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}' +
       '#stage .hk-rec[aria-pressed="true"]>span:first-child{background:#fff!important;box-shadow:0 0 7px #fff!important}\n';
     if (S.mode === 'day') css += '#stage .bezel{background:' + hsl(STAGES.slate[0], STAGES.slate[1], STAGES.slate[2]) + '!important}\n';
@@ -786,7 +787,7 @@
     colorStyle.textContent = styleCss(st) + schemeCss(st);
     P.accent = hsl(st.accentHue, st.accSat, 0.93); P.accentGlow = hsl(st.accentHue, st.accSat, 0.75, 0.8); ICON_GREEN = hsl(st.glassHue, st.glassSat, 0.5);
     TEXT.font = fontCss(st.font); TEXT.weight = st.weight === '700' ? 0 : +st.weight; TEXT.ls = st.tracking === 'normal' ? 0 : TRACK[st.tracking]; TEXT.upper = st.textCase !== 'title';
-    drawPad(); syncBlendLegend();
+    drawPad(); syncBlendLegend(); syncKeyOn();
     var tk = [st.font, st.weight, st.textCase, st.tracking].join('|');
     if (tk !== textKey) {   // the portrait layout spaces controls by measured label widths: measure again
       textKey = tk;
