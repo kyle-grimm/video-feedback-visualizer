@@ -845,3 +845,16 @@ shifted for Darken.
 Tested in headless Chrome at 900 x 1340 and 1340 x 910: taper midpoints (Modulate 0.119, Persistence 0.924 at half
 travel), double-click zero on every knob, Chromakey ON/OFF and glow, presets save (with picture) / recall / window in
 both schemes and layouts, no console errors.
+
+## 22. Presets window on phones, recording glow (2026-10-16)
+- **Presets window** controls are sized in device pixels (`dp` in `renderPresets`: stage px = device px / stage
+  scale), so they stay large where the stage is scaled down (a phone shows it at about 0.43): a 44 px **Save** button
+  and 44 px close button in the header, 36 px delete buttons, 15 px names over 13 px dates, and 2–5 columns of cards
+  about 110 px wide. The grid scrolls by touch and keeps its scroll position on redraw; the window redraws when the
+  stage scale changes. Checked at 390 x 844 (phone emulation): Save 68 x 44, close 44 x 44, delete 36 x 36, two
+  columns of 96 x 219 cards.
+- **Rotate** is ±0.5 rad per frame (a quarter of the range set in §21).
+- **Full and Record** have no indicator light (`noLed` keys: the state is kept as aria-pressed only). While
+  recording, the Record key's text (Stop) pulses a soft white glow at 80 bpm (0.75 s, `rec-pulse` in `style.css`;
+  a steady glow under reduced motion).
+- **Chromakey OFF** reads in light grey (#b4b2b8).

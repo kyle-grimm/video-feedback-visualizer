@@ -55,3 +55,8 @@ button:focus-visible { box-shadow: 0 0 0 2px #cfabf6 !important; }
     repeating-linear-gradient(0deg, rgba(255,255,255,0.028) 0 1px, rgba(0,0,0,0.05) 1px 2px, transparent 2px 3px, rgba(255,255,255,0.015) 3px 4px, transparent 4px 7px),
     linear-gradient(170deg, rgba(255,255,255,0.13), rgba(255,255,255,0) 45%, rgba(0,0,0,0.28)); }
 .tab { background: var(--fc) !important; }
+
+/* Recording: the Record key's text (Stop while recording) pulses a soft glow at 80 bpm (0.75 s). */
+@keyframes rec-pulse { 0%, 100% { text-shadow: 0 0 2px rgba(255, 255, 255, 0.25); } 50% { text-shadow: 0 0 6px #fff, 0 0 14px rgba(255, 225, 215, 0.85); } }
+#stage .hk-rec[data-rec="1"] > span:last-child { animation: rec-pulse 0.75s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { #stage .hk-rec[data-rec="1"] > span:last-child { animation: none; text-shadow: 0 0 6px #fff; } }

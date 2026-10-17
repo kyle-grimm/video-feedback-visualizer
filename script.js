@@ -175,7 +175,8 @@ function knob(x, y, size, label, key, o) {
   return k;
 }
 
-// Rubber key. led: on / sel / rec / off / null. o: glyph, fs, onClick, aria, tint ('blue': no LED, the whole key lights).
+// Rubber key. led: on / sel / rec / off / null. o: glyph, fs, onClick, aria, tint ('blue': no LED, the whole key lights),
+// noLed (the state is kept, and shown only as aria-pressed).
 var LED = { on: P.accent, sel: P.select, rec: P.rec, off: P.off };
 var TINT = {
   blue: { on: ['linear-gradient(to bottom,#5b8fe0,#3568b8)', '0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.3)', '#ffffff'],
@@ -185,7 +186,7 @@ function key(x, y, w, h, label, led, o) {
   o = o || {};
   var tint = o.tint ? TINT[o.tint] : null, init = led;
   if (tint) led = null;
-  var b = el('button', at(x, y, w, h) + ';box-sizing:border-box;padding:' + (led != null ? '6px' : '0') + ' 0 0;border:none;border-radius:5px;' +
+  var b = el('button', at(x, y, w, h) + ';box-sizing:border-box;padding:' + (led != null && !o.noLed ? '6px' : '0') + ' 0 0;border:none;border-radius:5px;' +
     'background:linear-gradient(to bottom,#49474d,#363439 55%,#2d2c30);box-shadow:0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.09);' +
     'display:flex;align-items:center;justify-content:center;font-family:inherit;font-size:' + (o.fs || 10 * UL) + 'px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:' + P.ink + ';cursor:pointer;transition:transform 40ms');
   b.type = 'button'; b.setAttribute('aria-label', o.aria || label); b.className = tint ? 'key key-tint' : 'key';
@@ -201,6 +202,7 @@ function key(x, y, w, h, label, led, o) {
         b.style.background = st[0]; b.style.boxShadow = st[1]; b.style.color = st[2]; b.setAttribute('aria-pressed', on ? 'true' : 'false');
         return;
       }
+      if (o.noLed) { ledEl.style.display = 'none'; b.setAttribute('aria-pressed', s != null && s !== 'off' ? 'true' : 'false'); return; }
       if (s == null) { ledEl.style.display = 'none'; return; }
       ledEl.style.display = ''; ledEl.style.background = LED[s]; ledEl.style.boxShadow = s === 'off' ? 'none' : '0 0 7px ' + LED[s];
       b.setAttribute('aria-pressed', s === 'off' ? 'false' : 'true');
@@ -239,7 +241,7 @@ var PD = {
   delay: { min: 0, max: RING_SIZE - 2, def: 0, step: 1, f: function (v) { return v < 0.5 ? 'Live' : v + (v === 1 ? ' frame' : ' frames'); } },
   // Transform (per frame)
   zoom: { min: 0.8, max: 1.2, def: 1.012, step: 0.001, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
-  rotate: { min: -2, max: 2, def: 0.012, step: 0.001, snap: 0, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
+  rotate: { min: -0.5, max: 0.5, def: 0.012, step: 0.001, snap: 0, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
   translateX: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
   translateY: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
   hueDrift: { min: -0.1, max: 0.1, def: 0.01, step: 0.001, snap: 0, f: function (v) { return sgn(v * 360, 1) + '°'; } },
@@ -354,10 +356,10 @@ function makeKeys(r, fs) {
   fs = Math.min(fs, Math.floor(fs * (r[0][2] - 10) / widest * 10) / 10);
   var K = function (i, label, led, o, cls) { o.fs = fs; var k = key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); k.b.className += ' hk' + (cls ? ' ' + cls : ''); return k; };
   ui.scheme = K(0, 'Day', null, { aria: 'Day / night colour scheme', onClick: toggleScheme }, 'hk-scheme');
-  ui.full = K(1, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.full = K(1, 'Full', 'off', { noLed: true, aria: 'Fullscreen', onClick: toggleFullscreen });
   ui.freeze = K(2, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
   ui.presets = K(3, 'Presets', null, { aria: 'Presets', onClick: presetsKey });
-  ui.rec = K(4, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
+  ui.rec = K(4, 'Record', 'off', { noLed: true, aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
   // Full: the label inside segmented corner brackets, like a fullscreen glyph.
   var bl = Math.round(fs * 0.5) + 'px', bt = Math.max(1.5, Math.round(fs * 0.12 * 2) / 2) + 'px', bg = 'linear-gradient(currentColor,currentColor) ';
   ui.full.txt.style.cssText = 'padding:' + Math.round(fs * 0.25) + 'px ' + Math.round(fs * 0.45) + 'px;line-height:1;background:' +
@@ -666,7 +668,7 @@ function syncKeyOn() {
   k.txt.textContent = on ? 'On' : 'Off';
   k.b.setAttribute('aria-pressed', on ? 'true' : 'false');
   k.b.style.boxShadow = on ? k.shadow + ',0 0 14px 2px ' + P.accentGlow : k.shadow;
-  k.txt.style.color = on ? P.accent : ''; k.txt.style.textShadow = on ? '0 0 7px ' + P.accentGlow : '';
+  k.txt.style.color = on ? P.accent : '#b4b2b8'; k.txt.style.textShadow = on ? '0 0 7px ' + P.accentGlow : '';
 }
 function syncKeySwatch() {
   if (!ui.keySwatch) return;
@@ -1380,39 +1382,52 @@ function deletePreset(id) {
   storePresets(list.filter(function (x) { return x.id !== id; }));
   renderPresets();
 }
-// The window lives inside the screen (rebuilt with the panel), below the Lab key.
+// The window lives inside the screen (rebuilt with the panel), below the Lab key. Its controls are sized in device
+// pixels (dp), not stage pixels, so they stay large on a phone where the stage is scaled down: 44 px Save and close
+// buttons, 36 px delete buttons, 14-18 px text, and as many columns as fit cards about 110 px wide (2 to 5).
+var presetsScale = 0;
 function renderPresets() {
+  var keep = ui.presetWin ? ui.presetWin.querySelector('.presets-grid').scrollTop : 0;
   if (ui.presetWin) { ui.presetWin.remove(); ui.presetWin = null; }
   if (!presetsOpen || !ui.screen) return;
-  var f = 11 * UL, list = loadPresets(), cols = LAND ? 4 : 3, top = 40 * UK;
-  var w = el('div', 'position:absolute;left:10px;right:10px;top:' + top + 'px;bottom:10px;z-index:3;display:flex;flex-direction:column;box-sizing:border-box;padding:' + f * 0.7 + 'px;' +
-    'border-radius:6px;background:rgba(12,12,15,0.58);-webkit-backdrop-filter:blur(7px) saturate(1.2);backdrop-filter:blur(7px) saturate(1.2);' +
+  var k = stageScale(); presetsScale = k;
+  var dp = function (px) { return px / k; }, list = loadPresets(), top = 40 * UK;
+  var cols = Math.max(2, Math.min(5, Math.floor((ui.screen.clientWidth - 20 - dp(24)) * k / 110)));
+  var btn = 'font:inherit;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;line-height:1;border:none;cursor:pointer;touch-action:manipulation;' +
+    'flex:none;display:flex;align-items:center;justify-content:center;border-radius:' + dp(6) + 'px;';
+  var w = el('div', 'position:absolute;left:10px;right:10px;top:' + top + 'px;bottom:10px;z-index:3;display:flex;flex-direction:column;box-sizing:border-box;padding:' + dp(12) + 'px;' +
+    'border-radius:' + dp(8) + 'px;background:rgba(12,12,15,0.6);-webkit-backdrop-filter:blur(7px) saturate(1.2);backdrop-filter:blur(7px) saturate(1.2);' +
     'box-shadow:0 0 0 1px rgba(255,255,255,0.14),0 10px 30px rgba(0,0,0,0.45);color:#ebebeb;font-family:inherit', ui.screen);
   w.className = 'presets'; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Presets');
   w.addEventListener('dblclick', function (e) { e.stopPropagation(); });   // the screen's double-click is fullscreen
   ui.presetWin = w;
-  var hd = el('div', 'display:flex;align-items:center;gap:8px;margin-bottom:' + f * 0.6 + 'px', w);
-  el('span', 'flex:1;font-size:' + f * 1.1 + 'px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase', hd, 'Presets');
-  var x = el('button', 'font:inherit;font-size:' + f * 1.2 + 'px;line-height:1;color:#ebebeb;background:rgba(255,255,255,0.1);border:none;border-radius:4px;padding:' + f * 0.2 + 'px ' + f * 0.5 + 'px;cursor:pointer', hd, '×');
+  var hd = el('div', 'display:flex;align-items:center;gap:' + dp(10) + 'px;margin-bottom:' + dp(12) + 'px', w);
+  el('span', 'flex:1;font-size:' + dp(18) + 'px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase', hd, 'Presets');
+  var sv = el('button', btn + 'height:' + dp(44) + 'px;padding:0 ' + dp(18) + 'px;font-size:' + dp(15) + 'px;color:#19181a;background:' + P.accent + ';box-shadow:0 0 ' + dp(10) + 'px ' + P.accentGlow, hd, 'Save');
+  sv.setAttribute('aria-label', 'Save the current settings as a new preset'); sv.addEventListener('click', savePresetNew);
+  var x = el('button', btn + 'width:' + dp(44) + 'px;height:' + dp(44) + 'px;font-size:' + dp(24) + 'px;color:#ebebeb;background:rgba(255,255,255,0.14)', hd, '×');
   x.setAttribute('aria-label', 'Close presets'); x.addEventListener('click', closePresets);
-  var grid = el('div', 'flex:1;overflow:auto;display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:' + f * 0.6 + 'px;align-content:start', w);
-  if (!list.length) el('div', 'grid-column:1/-1;font-size:' + f + 'px;line-height:1.4;color:rgba(235,235,235,0.75);padding:' + f + 'px 2px', grid,
-    'No presets yet. Press Save (the key below the screen) to keep every knob, the mixer and Chromakey on/off as a preset.');
+  var grid = el('div', 'flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;display:grid;grid-template-columns:repeat(' + cols + ',minmax(0,1fr));grid-auto-rows:max-content;gap:' + dp(10) + 'px;align-content:start', w);
+  grid.className = 'presets-grid';
+  if (!list.length) el('div', 'grid-column:1/-1;font-size:' + dp(15) + 'px;line-height:1.45;color:rgba(235,235,235,0.8);padding:' + dp(8) + 'px 2px', grid,
+    'No presets yet. Save keeps every knob, the mixer and Chromakey on/off as a preset with a picture of the output.');
   list.forEach(function (p) {
     var on = p.id === presetsActive, d = new Date(p.t), z = function (v) { return (v < 10 ? '0' : '') + v; };
-    var card = el('div', 'position:relative;cursor:pointer;border-radius:4px;overflow:hidden;background:rgba(0,0,0,0.45);box-shadow:0 0 0 ' + (on ? '2px ' + P.accent + ',0 0 10px ' + P.accentGlow : '1px rgba(255,255,255,0.12)'), grid);
+    var card = el('div', 'position:relative;cursor:pointer;border-radius:' + dp(6) + 'px;overflow:hidden;background:rgba(0,0,0,0.45);touch-action:manipulation;box-shadow:0 0 0 ' +
+      (on ? dp(2.5) + 'px ' + P.accent + ',0 0 ' + dp(12) + 'px ' + P.accentGlow : '1px rgba(255,255,255,0.14)'), grid);
     card.setAttribute('role', 'button'); card.setAttribute('aria-label', 'Recall ' + p.name); card.tabIndex = 0;
-    var pic = el('div', 'aspect-ratio:' + CW + '/' + CH + ';background:#000 center/cover no-repeat' + (p.thumb ? ' url(' + p.thumb + ')' : ''), card);
+    var pic = el('div', 'height:0;padding-top:' + (CH / CW * 100).toFixed(2) + '%;background:#000 center/cover no-repeat' + (p.thumb ? ' url(' + p.thumb + ')' : ''), card);
     if (!p.thumb) pic.style.background = 'linear-gradient(135deg,#222026,#0b0b0c)';
-    var cap = el('div', 'padding:' + f * 0.3 + 'px ' + f * 0.4 + 'px;font-size:' + f * 0.85 + 'px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', card);
-    el('b', 'font-weight:800;letter-spacing:0.06em;text-transform:uppercase' + (on ? ';color:' + P.accent : ''), cap, p.name);
-    el('span', 'color:rgba(235,235,235,0.6);margin-left:6px', cap, z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()));
-    var del = el('button', 'position:absolute;right:3px;top:3px;font:inherit;font-size:' + f * 0.9 + 'px;line-height:1;color:#ebebeb;background:rgba(0,0,0,0.55);border:none;border-radius:3px;padding:2px ' + f * 0.35 + 'px;cursor:pointer', card, '×');
+    var cap = el('div', 'padding:' + dp(7) + 'px ' + dp(8) + 'px;line-height:1.25;white-space:nowrap;overflow:hidden', card);
+    el('div', 'font-size:' + dp(15) + 'px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis' + (on ? ';color:' + P.accent : ''), cap, p.name);
+    el('div', 'font-size:' + dp(13) + 'px;color:rgba(235,235,235,0.65)', cap, z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()));
+    var del = el('button', btn + 'position:absolute;right:' + dp(4) + 'px;top:' + dp(4) + 'px;width:' + dp(36) + 'px;height:' + dp(36) + 'px;font-size:' + dp(22) + 'px;color:#ebebeb;background:rgba(0,0,0,0.6)', card, '×');
     del.setAttribute('aria-label', 'Delete ' + p.name);
     del.addEventListener('click', function (e) { e.stopPropagation(); deletePreset(p.id); });
     card.addEventListener('click', function () { recallPresetById(p.id); });
     card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recallPresetById(p.id); } });
   });
+  grid.scrollTop = keep;
 }
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && presetsOpen && !pseudoFs) closePresets(); });
 
@@ -1483,6 +1498,7 @@ function syncRec() {
   var cap = !rec && frozen;
   ui.rec.set(rec ? (rec.saving ? 'sel' : 'rec') : cap ? null : 'off');
   ui.rec.txt.textContent = rec ? (rec.saving ? 'Saving' : 'Stop') : cap ? 'Capture' : 'Record';
+  ui.rec.b.dataset.rec = rec && !rec.saving ? '1' : '';   // the text pulses a soft glow while recording (style.css)
   ui.rec.b.setAttribute('aria-label', rec ? 'Stop recording and save' : cap ? 'Capture the output as an image' : 'Record the output to a video file');
 }
 function toggleRecording() {
@@ -1637,6 +1653,7 @@ function scaleStage() {
   var v = viewSize(), k = Math.min(v[0] / SW, v[1] / SH);
   stage.dataset.scale = String(k);
   stage.style.transform = 'translate(' + ((v[0] - SW * k) / 2) + 'px,' + ((v[1] - SH * k) / 2) + 'px) scale(' + k + ')';
+  if (presetsOpen && Math.abs(k - presetsScale) > 0.01) renderPresets();   // its controls are sized in device pixels
 }
 // While a window is being resized, rescale at once but rebuild (a design-mode layout follows the window's shape, so
 // every size step would otherwise rebuild the whole panel) only once the resizing pauses.

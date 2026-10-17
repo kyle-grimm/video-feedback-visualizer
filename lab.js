@@ -777,8 +777,7 @@
     var om = S.mode === 'day' ? 'night' : 'day', css = keyCss('#stage .hk', st) + keyCss('#stage .hk.hk-scheme', resolve(S.looks[om] || BUILTIN[om]));
     css += '#stage .hk.key-tint[aria-pressed="true"]{background:linear-gradient(to bottom,#5b8fe0,#3568b8)!important;color:#fff!important}' +
       '#stage .hk.key-tint:not([aria-pressed="true"]){color:' + (st.sLight < 0.5 ? '#86aaf5' : '#2f62c2') + '!important}\n';
-    css += '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}' +
-      '#stage .hk-rec[aria-pressed="true"]>span:first-child{background:#fff!important;box-shadow:0 0 7px #fff!important}\n';
+    css += '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}\n';
     if (S.mode === 'day') css += '#stage .bezel{background:' + hsl(STAGES.slate[0], STAGES.slate[1], STAGES.slate[2]) + '!important}\n';
     return css;
   }
