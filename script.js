@@ -14,7 +14,7 @@
 //   5. GLSL source (vertex, feedback fragment, display fragment)
 //   6. Camera source
 //   7. Uniform upload + render loop
-//   8. Header keys (day-night/freeze/reset/save/recall/record-capture/fullscreen), presets, recording, fit to window
+//   8. Header keys (day-night/fullscreen/freeze/save/recall/record-capture), presets, recording, fit to window
 // ===================================================================
 
 var REPORT = [];
@@ -334,21 +334,22 @@ function makeScreen(x, y, w, h) {
   if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys: Night/Day, Freeze, Reset, Save, Recall, Record (Capture while frozen), Full in the NKEYS rects
-// [x, y, w, h]. The label size shrinks from fs if the longest label the keys can show would not fit the key width.
-var NKEYS = 7, KEY_LABELS = ['Night', 'Day', 'Freeze', 'Reset', 'Save', 'Recall', 'Record', 'Capture', 'Stop', 'Saving', 'Full'];
+// Header keys: Day/Night, Full, Freeze, Save, Recall, Record (Capture while frozen) in the NKEYS rects [x, y, w, h].
+// The label size shrinks from fs if the longest label the keys can show would not fit the key width. Class hk marks
+// them for the Style Lab, which colours them to the background (the Day/Night key in the other scheme's colours, the
+// Record key red).
+var NKEYS = 6, KEY_LABELS = ['Night', 'Day', 'Full', 'Freeze', 'Save', 'Recall', 'Record', 'Capture', 'Stop', 'Saving'];
 function makeKeys(r, fs) {
   fs = fs || 10;
   var widest = Math.max.apply(null, KEY_LABELS.map(function (t) { return textW(t.toUpperCase(), fs, 700, 0.08); }));
   fs = Math.min(fs, Math.floor(fs * (r[0][2] - 10) / widest * 10) / 10);
-  var K = function (i, label, led, o) { o.fs = fs; return key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); };
-  ui.scheme = K(0, 'Night', null, { aria: 'Day / night colour scheme', onClick: toggleScheme });
-  ui.freeze = K(1, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
-  ui.reset = K(2, 'Reset', null, { aria: 'Reset all controls and clear the screen', onClick: resetAll });
+  var K = function (i, label, led, o, cls) { o.fs = fs; var k = key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); k.b.className += ' hk' + (cls ? ' ' + cls : ''); return k; };
+  ui.scheme = K(0, 'Day', null, { aria: 'Day / night colour scheme', onClick: toggleScheme }, 'hk-scheme');
+  ui.full = K(1, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.freeze = K(2, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
   ui.save = K(3, 'Save', null, { aria: 'Save preset (every knob, the mixer and Chromakey on/off)', onClick: savePreset });
   ui.recall = K(4, 'Recall', null, { aria: 'Recall the saved preset', onClick: recallPreset });
-  ui.rec = K(5, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording });
-  ui.full = K(6, 'Full', 'off', { aria: 'Fullscreen', onClick: toggleFullscreen });
+  ui.rec = K(5, 'Record', 'off', { aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
   ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncScheme(); syncRec();
 }
 // Camera cluster centred on (cx, cy): On (enable) over a Front / Back pair, label below.
@@ -1275,19 +1276,14 @@ function resizeTargets() {
   clearScreen();
 }
 
-function resetAll() {
-  Object.assign(params, DEFAULTS);
-  syncUI();
-  clearScreen();
-}
-
 // Day / night colour scheme: the Style Lab (lab.js) owns the two looks and listens through window.onSchemeChange.
-// Night (Favourite 6 tuned) is the standard; Day is Favourite 17 tuned 2. The key names the scheme on show.
+// Night is the standard; Day is Favourite 17 tuned 2, and Night is Day with its own colours, texture and nameplates.
+// The key names (and wears the colours of) the scheme it switches to.
 var scheme = 'night';
 function syncScheme() {
   if (!ui.scheme) return;
-  ui.scheme.txt.textContent = scheme === 'day' ? 'Day' : 'Night';
-  ui.scheme.b.setAttribute('aria-label', scheme === 'day' ? 'Day scheme (switch to night)' : 'Night scheme (switch to day)');
+  ui.scheme.txt.textContent = scheme === 'day' ? 'Night' : 'Day';
+  ui.scheme.b.setAttribute('aria-label', scheme === 'day' ? 'Switch to the night scheme' : 'Switch to the day scheme');
 }
 function toggleScheme() {
   scheme = scheme === 'day' ? 'night' : 'day';
@@ -1295,7 +1291,7 @@ function toggleScheme() {
   if (window.onSchemeChange) window.onSchemeChange(scheme);
 }
 
-// Preset: one slot holding every knob, the mixer puck and Chromakey on/off (everything Reset restores), kept in
+// Preset: one slot holding every knob, the mixer puck and Chromakey on/off, kept in
 // localStorage so it survives a reload. Camera on/off is left alone. Recall with nothing saved flashes the key.
 var PRESET_STORE = 'vfv-preset-v1';
 function savePreset() {

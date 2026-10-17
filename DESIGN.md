@@ -803,3 +803,17 @@ Tested in headless Chromium (SwiftShader) at 900 x 1340 and 1340 x 910: Night lo
 to Favourite 17 tuned 2 and survives a reload, Save/Recall restores knob and mixer values, Recall with no preset
 flashes, Freeze turns Record into Capture and Capture saved a 720 x 1280 PNG, unfreezing restores Record, all seven
 labels fit their keys in both layouts.
+
+## 20. Day base for both schemes; header keys follow the background (2026-10-16)
+- **Night is built on Day.** Both schemes now share Day's (Favourite 17 tuned 2) knobs, font (Saira Condensed, bold,
+  tight spacing, uppercase) and label colour. Night differs only in its colour scheme (window colours, saturation,
+  lightness, background, accent, outline), texture (texture, strength, sheen) and window labels (nameplates), which
+  come from Favourite 6 tuned (`NIGHT_SRC` in `lab.js`, composed by `nightFrom`). Home-base edits to either favourite
+  still carry over. Looks adopted per scheme before this change are dropped once (`lookV: 2`) so the new standards show.
+- **Header keys:** Day/Night, Full, Freeze, Save, Recall, Record. Reset is removed. The keys take the background's
+  colour and lightness (light keys with dark text on Day, slate keys with light text on Night); Freeze lights blue
+  when on. The Day/Night key names and wears the colours of the scheme it switches to: on Day it is the dark Night key,
+  on Night the light Day key. Record / Capture is red with white text (its LED turns white while recording). The
+  styling is CSS from `schemeCss` in `lab.js` on keys marked `hk` by `makeKeys`.
+- **Day bezel:** in the day scheme the ridge around the output is slate (the night background colour).
+Checked in headless Chrome at 900 x 1340 and 1340 x 910: both schemes, key colours, Freeze on, Capture red.

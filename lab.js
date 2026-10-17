@@ -116,6 +116,11 @@
       names: { ink: 'white chip', filled: 'family-colour chip', dark: 'dark chip', outline: 'outlined', black: 'black chip', panel: 'window-tone chip', underline: 'underlined' } }
   );
   var DIM = {}; DIMS.forEach(function (d) { DIM[d.k] = d; });
+  // Override keys (exact values set at home base) that each element controls: changing the element (in the tuner) drops them.
+  var OKEYS = { 'panel.sat': ['pSat'], 'panel.light': ['pLight'], stage: ['sHue', 'sSat', 'sLight'], accent: ['accentHue', 'glassHue', 'accSat', 'glassSat'],
+    outline: ['outline'], texture: ['texture', 'texStr'], texStrength: ['texStr'], sheen: ['sheen'], cap: ['cap'], skirt: ['skirt'], pointer: ['pointer'],
+    pointerColor: ['ptr'], scale: ['scale'], font: ['font'], weight: ['weight'], case: ['textCase'], tracking: ['tracking'], labelColor: ['label'], nameplate: ['tab'] };
+  FAM5.forEach(function (f) { OKEYS['hue.' + f] = ['hue', 'sat']; });
   // Derived categorical measures (not sampled; computed from each design).
   var DERIVED = { harmony: 'Colour harmony', temperature: 'Colour temperature', polarity: 'Text polarity', hueAny: 'Window colour (any window)' };
   // Derived numeric measures, for threshold rules.
@@ -151,13 +156,29 @@
       skirt: 'knurled', pointer: 'line', pointerColor: 'family', scale: 'ticks', font: 'barlowSC', weight: '700', case: 'upper', tracking: 'normal',
       labelColor: 'dim', nameplate: 'ink' }
   };
-  // The standard looks of the two colour schemes (the Night / Day key): Night is Favourite 6 tuned, the app's standard
-  // look; Day is Favourite 17 tuned 2. Both are home-base designs, so later edits to them in favorites/favorites.json
-  // carry over (matched by id at startup). A design adopted in the Lab replaces the look of the scheme on show.
+  // The standard looks of the two colour schemes (the Day / Night key). Day is Favourite 17 tuned 2. Night (the app's
+  // standard look) is Day with only its colour scheme, texture and window labels (nameplates) taken from Favourite 6
+  // tuned (NIGHT_SRC), so both schemes share Day's knobs, font and label text. Both sources are home-base designs, so
+  // later edits to them in favorites/favorites.json carry over (matched by id at startup). A design adopted in the Lab
+  // replaces the look of the scheme on show.
+  var NIGHT_SRC = { id: 'm4dqf4b', home: true, name: 'Favourite 6 tuned', f: {"hue.feedback":"red","hue.chroma":"lime","hue.transform":"violet","hue.color":"blue","hue.layers":"neutral","panel.sat":"rich","panel.light":"pale","stage":"slate","accent":"cyan","outline":"none","texture":"scanlines","texStrength":"subtle","sheen":"soft","cap":"graphite","skirt":"knurled","pointer":"line","pointerColor":"family","scale":"ticks","font":"barlowSC","weight":"700","case":"upper","tracking":"normal","labelColor":"familyDark","nameplate":"black"}, j: {"h":[10.917,-10.665,2.294,0.226,-2.808],"s":[0.004,0.043,-0.063,0.025,-0.062],"l":0.003,"p":0.005} };
   var BUILTIN = {
-    night: { id: 'm4dqf4b', home: true, name: 'Favourite 6 tuned', f: {"hue.feedback":"red","hue.chroma":"lime","hue.transform":"violet","hue.color":"blue","hue.layers":"neutral","panel.sat":"rich","panel.light":"pale","stage":"slate","accent":"cyan","outline":"none","texture":"scanlines","texStrength":"subtle","sheen":"soft","cap":"graphite","skirt":"knurled","pointer":"line","pointerColor":"family","scale":"ticks","font":"barlowSC","weight":"700","case":"upper","tracking":"normal","labelColor":"familyDark","nameplate":"black"}, j: {"h":[10.917,-10.665,2.294,0.226,-2.808],"s":[0.004,0.043,-0.063,0.025,-0.062],"l":0.003,"p":0.005} },
     day: { id: '3w46slf', home: true, name: 'Favourite 17 tuned 2', f: {"hue.feedback":"red","hue.chroma":"lime","hue.transform":"violet","hue.color":"amber","hue.layers":"blue","panel.sat":"rich","panel.light":"pale","stage":"light","accent":"cyan","outline":"family","texture":"hatch","texStrength":"subtle","sheen":"soft","cap":"graphite","skirt":"knurled","pointer":"line","pointerColor":"family","scale":"ticks","font":"sairaC","weight":"700","case":"upper","tracking":"tight","labelColor":"familyDark","nameplate":"ink"}, j: {"h":[9.091,-8.965,-9.177,-3.191,-5.68],"s":[0.036,-0.034,-0.051,0.053,0.086],"l":-0.006,"p":-0.001} }
   };
+  var NIGHT_OWN = DIMS.filter(function (d) { return d.group === 'Colour' || d.group === 'Texture'; }).map(function (d) { return d.k; }).concat(['nameplate']);
+  function nightFrom(day, src) {
+    var sc = clone(day), owned = {};
+    NIGHT_OWN.forEach(function (k) { sc.f[k] = src.f[k]; OKEYS[k].forEach(function (o) { owned[o] = 1; }); });
+    sc.j = clone(src.j || { h: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], l: 0, p: 0 });   // the jitter only varies colour
+    var o = {};
+    if (day.o) Object.keys(day.o).forEach(function (k) { if (!owned[k]) o[k] = clone(day.o[k]); });
+    if (src.o) Object.keys(src.o).forEach(function (k) { if (owned[k]) o[k] = clone(src.o[k]); });
+    delete sc.o; delete sc.raw; delete sc.home;
+    if (Object.keys(o).length) sc.o = o;
+    sc.id = 'night'; sc.name = 'Night (Day + ' + src.name + ' colours)';
+    return sc;
+  }
+  BUILTIN.night = nightFrom(BUILTIN.day, NIGHT_SRC);
   var SHIPPED = BUILTIN.night;
   // A design's style: from its raw parameters (the shipped scheme) or its features + jitter, then any overrides (o):
   // exact style values set at home base, e.g. { "pLight": 0.3, "hue": [40, 125, 168, 305, 168] }.
@@ -319,7 +340,7 @@
     DIMS.forEach(function (d) { p[d.k] = { active: d.init.slice(), retired: [], reserve: shuffle(d.reserve.slice()), fresh: [], retest: [] }; });
     return p;
   }
-  function fresh() { return { v: 1, open: false, tab: 'rate', round: 0, cands: [], sel: 0, fsel: -1, recs: [], pools: initPools(), folder: [], mode: 'night', looks: { night: null, day: null }, seen: {}, log: [], meta: [] }; }
+  function fresh() { return { v: 1, open: false, tab: 'rate', round: 0, cands: [], sel: 0, fsel: -1, recs: [], pools: initPools(), folder: [], mode: 'night', looks: { night: null, day: null }, lookV: 2, seen: {}, log: [], meta: [] }; }
   function load() {
     try { S = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { S = null; }
     if (!S || S.v !== 1) S = fresh();
@@ -327,6 +348,8 @@
     // so the new standard (Favourite 6 tuned) shows.
     if (!S.looks) S.looks = { night: null, day: null };
     delete S.adopted;
+    // Night rebuilt on Day's base (2026-10-16): looks adopted before then are dropped so the new standards show.
+    if (S.lookV !== 2) { S.looks = { night: null, day: null }; S.lookV = 2; }
     if (S.mode !== 'day') S.mode = 'night';
   }
   function look() { return S.looks[S.mode]; }
@@ -741,9 +764,26 @@
     }
     return fontLinks[k];
   }
+  // The header keys take the background's colour, the Day/Night key the other scheme's (so it shows what it switches
+  // to); Freeze lights blue when on; Record / Capture is red with white text. In the day scheme the screen's bezel is
+  // slate.
+  function keyCss(sel, g) {
+    var dark = g.sLight < 0.5, c = function (dl) { return hsl(g.sHue, g.sSat, cl(g.sLight + dl, 0, 0.98)); };
+    return sel + '{background:linear-gradient(to bottom,' + (dark ? c(0.1) + ',' + c(0.05) + ' 55%,' + c(0.02) : c(0.07) + ',' + c(0.01) + ' 55%,' + c(-0.045)) + ')!important;' +
+      'color:' + (dark ? '#ebebeb' : hsl(g.sHue, g.sSat, 0.2)) + '!important;box-shadow:' + (dark ? '0 2px 0 rgba(0,0,0,0.6),0 4px 7px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.08)'
+      : '0 2px 0 rgba(0,0,0,0.22),0 3px 6px rgba(0,0,0,0.16),inset 0 1px 0 rgba(255,255,255,0.75)') + '!important}\n';
+  }
+  function schemeCss(st) {
+    var om = S.mode === 'day' ? 'night' : 'day', css = keyCss('#stage .hk', st) + keyCss('#stage .hk.hk-scheme', resolve(S.looks[om] || BUILTIN[om]));
+    css += '#stage .hk.key-tint[aria-pressed="true"]{background:linear-gradient(to bottom,#5b8fe0,#3568b8)!important;color:#fff!important}\n';
+    css += '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}' +
+      '#stage .hk-rec[aria-pressed="true"]>span:first-child{background:#fff!important;box-shadow:0 0 7px #fff!important}\n';
+    if (S.mode === 'day') css += '#stage .bezel{background:' + hsl(STAGES.slate[0], STAGES.slate[1], STAGES.slate[2]) + '!important}\n';
+    return css;
+  }
   function applyStyle(sc) {
     var st = resolve(sc);
-    colorStyle.textContent = styleCss(st);
+    colorStyle.textContent = styleCss(st) + schemeCss(st);
     P.accent = hsl(st.accentHue, st.accSat, 0.93); P.accentGlow = hsl(st.accentHue, st.accSat, 0.75, 0.8); ICON_GREEN = hsl(st.glassHue, st.glassSat, 0.5);
     TEXT.font = fontCss(st.font); TEXT.weight = st.weight === '700' ? 0 : +st.weight; TEXT.ls = st.tracking === 'normal' ? 0 : TRACK[st.tracking]; TEXT.upper = st.textCase !== 'title';
     drawPad(); syncBlendLegend();
@@ -889,11 +929,6 @@
   // saved as a new favourite on this device ("Send to home base" carries it with its name and origin). The work in
   // progress is kept in S.tune, so it survives a reload.
   var TGROUPS = [['Colour', 'Colour scheme'], ['Texture', 'Texture'], ['Knobs', 'Knobs'], ['Font', 'Text font'], ['Text colour', 'Text colour']];
-  // Override keys (exact values set at home base) that each element controls: changing the element drops them.
-  var OKEYS = { 'panel.sat': ['pSat'], 'panel.light': ['pLight'], stage: ['sHue', 'sSat', 'sLight'], accent: ['accentHue', 'glassHue', 'accSat', 'glassSat'],
-    outline: ['outline'], texture: ['texture', 'texStr'], texStrength: ['texStr'], sheen: ['sheen'], cap: ['cap'], skirt: ['skirt'], pointer: ['pointer'],
-    pointerColor: ['ptr'], scale: ['scale'], font: ['font'], weight: ['weight'], case: ['textCase'], tracking: ['tracking'], labelColor: ['label'], nameplate: ['tab'] };
-  FAM5.forEach(function (f) { OKEYS['hue.' + f] = ['hue', 'sat']; });
   var zeroJ = function () { return { h: [0, 0, 0, 0, 0], s: [0, 0, 0, 0, 0], l: 0, p: 0 }; };
   var groupDims = function (g) { return DIMS.filter(function (d) { return d.group === g; }); };
   function favPool() {   // every favourite: home base first, then this device's 5★ folder (ids deduplicated)
@@ -1222,9 +1257,11 @@
   if (S.open && !S.round) nextRound(true);
   if (S.open) Object.keys(FONTS).forEach(loadFont);
   loadHome().then(function () {
+    var bd = homeById(BUILTIN.day.id), bn = homeById(NIGHT_SRC.id);   // the standard looks follow edits at home base too
+    if (bd) BUILTIN.day = Object.assign(clone(bd.sc), { name: bd.name });
+    if (bn) NIGHT_SRC = Object.assign(clone(bn.sc), { name: bn.name });
+    BUILTIN.night = SHIPPED = nightFrom(BUILTIN.day, NIGHT_SRC);
     ['night', 'day'].forEach(function (m) {
-      var b = homeById(BUILTIN[m].id);   // the standard looks follow edits at home base too
-      if (b) BUILTIN[m] = Object.assign(clone(b.sc), { name: b.name });
       var lk = S.looks[m], d = lk && lk.home ? homeById(lk.id) : null;
       if (d && JSON.stringify(d.sc) !== JSON.stringify(lk)) { S.looks[m] = clone(d.sc); save(); }
     });
