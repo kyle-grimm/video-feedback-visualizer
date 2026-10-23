@@ -858,3 +858,22 @@ both schemes and layouts, no console errors.
   recording, the Record key's text (Stop) pulses a soft white glow at 80 bpm (0.75 s, `rec-pulse` in `style.css`;
   a steady glow under reduced motion).
 - **Chromakey OFF** reads in light grey (#b4b2b8).
+
+## 23. Advanced page (experimental, 2026-10-22)
+A **Main / Advanced** tab at the top right of the screen (the Lab key is top left) switches the panel between two
+pages with the same layout; the choice is kept (localStorage `vfv-page`). The Advanced page keeps every window where it
+is, in its family's colours, and swaps what is in it (`ADV_SECTIONS`, `pageSec`):
+- **Colors** (in Layers' place) is live: a hue EQ that scales saturation band by band around the spectrum. Twelve
+  bands 30° apart from red (`eq0`..`eq11`, 0–2×, 1 = unchanged; part of presets) are joined by a smooth periodic
+  Catmull-Rom curve, drawn over the spectrum on a glass screen with the spectrum strip under it greyed where the curve
+  dips. Drag across the screen to draw the curve, wheel over a band to nudge it, double-click a band to flatten it.
+  **Flat** resets every band; **Bypass** turns the EQ off and keeps the curve. In the shader (`hueEq`) the same curve
+  is sampled at each pixel's hue after Saturation, and the step is skipped when the EQ is flat or bypassed.
+- **LFO** (Waveform: Sine · Tri · Saw · Square · S&H, Rate, Depth, Phase), **Luma Key** (On/Off, Low Clip, High Clip,
+  Softness, Fill Hue, Fill Sat), **Kaleido** (Segments, Angle, Center X, Center Y, Spin) and **Clock** (Tempo,
+  Division, Swing, Steps) are placeholders: their knobs (`x_` params) turn, show values and are saved in presets, but
+  drive nothing yet.
+Ring legends (Blend Mode, Waveform) are now generic (`legend: [...]` in `CONTROLS`, `ringLegend`), and On/Off keys
+(Chromakey, Luma Key) share `makeOnOff`.
+Tested in headless Chrome at 900 x 1340 and 1340 x 910: switching both ways, every band at 0 turns the output grey
+(average chroma 241 → 0), Bypass restores colour, no GL or console errors.

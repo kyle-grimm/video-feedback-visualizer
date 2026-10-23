@@ -261,9 +261,34 @@ var PD = {
   noiseScale: { min: 0.5, max: 20, def: 4, step: 0.1, f: function (v) { return v.toFixed(1); } },
   shapeSides: { min: 3, max: 12, def: 5, step: 1, f: function (v) { return v + ' sides'; } }
 };
+// Advanced page (experimental): placeholder modules, named and ranged like a video synthesizer's, whose knobs turn
+// but drive nothing yet (x_ prefix). The Colors hue EQ there is live (eq0..eq11 below).
+var LFO_WAVES = ['Sine', 'Tri', 'Saw', 'Square', 'S&H'], CLOCK_DIVS = ['1/1', '1/2', '1/4', '1/8', '1/16'];
+Object.assign(PD, {
+  x_lfoWave: { min: 0, max: 4, def: 0, zero: 0, step: 1, f: function (v) { return LFO_WAVES[v]; } },
+  x_lfoRate: { min: 0.02, max: 20, def: 1, log: true, step: 0.01, f: function (v) { return v.toFixed(2) + ' Hz'; } },
+  x_lfoDepth: { min: 0, max: 1, def: 0.5, step: 0.01, f: pct },
+  x_lfoPhase: { min: 0, max: 360, def: 0, step: 1, f: deg },
+  x_lkLow: { min: 0, max: 1, def: 0.2, step: 0.01, f: pct },
+  x_lkHigh: { min: 0, max: 1, def: 0.8, step: 0.01, f: pct },
+  x_lkSoft: { min: 0, max: 0.5, def: 0.1, step: 0.005, f: function (v) { return v.toFixed(3); } },
+  x_lkFillHue: { min: 0, max: 360, def: 200, step: 1, f: deg },
+  x_lkFillSat: { min: 0, max: 1, def: 0.6, step: 0.01, f: pct },
+  x_kalSeg: { min: 2, max: 16, def: 6, step: 1, f: function (v) { return v + ' segments'; } },
+  x_kalAngle: { min: 0, max: 360, def: 0, step: 1, f: deg },
+  x_kalX: { min: -0.5, max: 0.5, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v * 100, 1) + '%'; } },
+  x_kalY: { min: -0.5, max: 0.5, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v * 100, 1) + '%'; } },
+  x_kalSpin: { min: -1, max: 1, def: 0, step: 0.01, snap: 0, f: function (v) { return sgn(v, 2) + ' rev/s'; } },
+  x_clkTempo: { min: 40, max: 240, def: 120, step: 1, f: function (v) { return v + ' BPM'; } },
+  x_clkDiv: { min: 0, max: 4, def: 2, zero: 0, step: 1, f: function (v) { return CLOCK_DIVS[v]; } },
+  x_clkSwing: { min: 0, max: 0.75, def: 0, step: 0.01, f: pct },
+  x_clkSteps: { min: 1, max: 16, def: 8, step: 1, f: function (v) { return v + (v === 1 ? ' step' : ' steps'); } }
+});
 // Fixed generator settings that no longer have knobs.
 var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
-var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
+var EQ_N = 12, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Lime', 'Green', 'Spring', 'Cyan', 'Azure', 'Blue', 'Violet', 'Magenta', 'Rose'];
+var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75, eqBypass: false, x_lkOn: false };
+for (var q = 0; q < EQ_N; q++) DEFAULTS['eq' + q] = 1;
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
 // Camera layer state (not a preset parameter): facing 'user' (front, mirrored) or 'environment' (back).
@@ -311,14 +336,19 @@ function LABEL() { return 'font-size:' + 10 * UL + 'px;font-weight:700;letter-sp
 
 // Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
 var CONTROLS = {
-  blendMode: ['Blend Mode', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: true }],   // a short drag per position
+  blendMode: ['Blend Mode', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: BLEND_NAMES }],   // a short drag per position
   modulateAmount: ['Modulate'], feedback: ['Persistence'], delay: ['Delay'],
   keyOn: [''], keyHue: ['Key Hue', { after: function () { syncKeySwatch(); } }],
   keySat: ['Key Sat', { after: function () { syncKeySwatch(); } }], keyLight: ['Key Light', { after: function () { syncKeySwatch(); } }],
   chromakeyThreshold: ['Threshold'], chromakeySoftness: ['Softness'],
   zoom: ['Zoom'], rotate: ['Rotate'], translateX: ['Shift X'], translateY: ['Shift Y'], hueDrift: ['Hue Drift'],
   hue: ['Hue'], saturate: ['Saturation'], brightness: ['Brightness'], contrast: ['Contrast'],
-  camera: ['Camera'], oscSize: ['Osc Size'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }]
+  camera: ['Camera'], oscSize: ['Osc Size'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }],
+  // Advanced page
+  x_lfoWave: ['Waveform', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: LFO_WAVES }], x_lfoRate: ['Rate'], x_lfoDepth: ['Depth'], x_lfoPhase: ['Phase'],
+  x_lkOn: [''], x_lkLow: ['Low Clip'], x_lkHigh: ['High Clip'], x_lkSoft: ['Softness'], x_lkFillHue: ['Fill Hue'], x_lkFillSat: ['Fill Sat'],
+  x_kalSeg: ['Segments', { ticks: 15 }], x_kalAngle: ['Angle'], x_kalX: ['Center X'], x_kalY: ['Center Y'], x_kalSpin: ['Spin'],
+  x_clkTempo: ['Tempo'], x_clkDiv: ['Division', { ticks: 5, range: 90 }], x_clkSwing: ['Swing'], x_clkSteps: ['Steps', { ticks: 16 }]
 };
 var SECTIONS = {
   feedback: { title: 'Feedback', items: ['blendMode', 'modulateAmount', 'feedback', 'delay'] },
@@ -328,6 +358,38 @@ var SECTIONS = {
   layers: { title: 'Layers', items: ['camera', 'oscSize', 'noiseScale', 'shapeSides'] },
   mix: { title: 'Mix', items: [] }
 };
+// The Advanced page (experimental) keeps every window where it is and swaps what is in it: Colors (a hue EQ) for
+// Layers, and placeholder modules (LFO, Luma Key, Kaleido, Clock) for the effect windows. The windows keep their
+// families' colours. The Main / Advanced tab at the top right of the screen switches; the choice is kept.
+var ADV_SECTIONS = {
+  feedback: { title: 'LFO', items: ['x_lfoWave', 'x_lfoRate', 'x_lfoDepth', 'x_lfoPhase'] },
+  chroma: { title: 'Luma Key', items: ['x_lkOn', 'x_lkLow', 'x_lkHigh', 'x_lkSoft', 'x_lkFillHue', 'x_lkFillSat'] },
+  transform: { title: 'Kaleido', items: ['x_kalSeg', 'x_kalAngle', 'x_kalX', 'x_kalY', 'x_kalSpin'] },
+  color: { title: 'Clock', items: ['x_clkTempo', 'x_clkDiv', 'x_clkSwing', 'x_clkSteps'] },
+  layers: { title: 'Colors', items: [] }
+};
+var page = 'main';
+try { if (localStorage.getItem('vfv-page') === 'adv') page = 'adv'; } catch (e) { /* main */ }
+function pageSec(fam) { return (page === 'adv' ? ADV_SECTIONS : SECTIONS)[fam]; }
+function setPage(p) {
+  page = p === 'adv' ? 'adv' : 'main';
+  try { localStorage.setItem('vfv-page', page); } catch (e) { /* not kept */ }
+  build(); scaleStage();
+}
+// Main / Advanced tabs at the top right of the screen (the Lab key is top left).
+function makeTabs() {
+  var h = 22 * UK, f = 9 * UL, x = ui.bezel[0] + ui.bezel[2] - 14, y = ui.bezel[1] + 14;
+  ui.tabs = [['adv', 'Advanced'], ['main', 'Main']].map(function (t) {
+    var w = textW(t[1], f, 700, 0.08) + 18 * UL;
+    x -= w;
+    var k = key(x, y, w, h, t[1], null, { fs: f, aria: t[1] + ' page', onClick: function () { if (page !== t[0]) setPage(t[0]); } });
+    var on = page === t[0];
+    k.b.style.zIndex = '5'; k.b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    k.txt.style.color = on ? P.accent : P.inkMute; k.txt.style.textShadow = on ? '0 0 6px ' + P.accentGlow : 'none';
+    x -= 4;
+    return k;
+  });
+}
 
 // The WebGL canvas outlives layout rebuilds (its context, programs and camera texture stay); only its size changes.
 var glCanvas = document.createElement('canvas');
@@ -365,6 +427,7 @@ function makeKeys(r, fs) {
   ui.full.txt.style.cssText = 'padding:' + Math.round(fs * 0.25) + 'px ' + Math.round(fs * 0.45) + 'px;line-height:1;background:' +
     ['left top', 'right top', 'left bottom', 'right bottom'].map(function (p) { return bg + p + '/' + bl + ' ' + bt + ' no-repeat,' + bg + p + '/' + bt + ' ' + bl + ' no-repeat'; }).join(',');
   ui.freeze.set(frozen ? 'on' : 'off'); ui.full.set(pseudoFs ? 'on' : 'off'); syncScheme(); syncRec(); syncPresetsKey(); renderPresets();
+  makeTabs();   // here, once the layout has set its control scale
 }
 // Camera cluster centred on (cx, cy): a tall On key on the left, Back over Front on the right, label below.
 function makeCamera(cx, cy, fam) {
@@ -376,21 +439,27 @@ function makeCamera(cx, cy, fam) {
   var lab = cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
   syncCam();
 }
-// Chromakey On / Off key centred on (cx, cy), no label: the key names the state and glows softly while on.
-function makeChromaOn(cx, cy, ks, fam) {
-  ui.keyOn = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'Off', null, { aria: 'Chromakey', onClick: function () { params.chromakeyEnabled = !params.chromakeyEnabled; syncKeyOn(); } });
-  ui.keyOn.shadow = ui.keyOn.b.style.boxShadow;
+// On / Off key for boolean params[param] centred on (cx, cy), no label: the key names the state and glows softly while
+// on (Chromakey; Luma Key on the Advanced page).
+function makeOnOff(cx, cy, param, aria) {
+  var k = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'Off', null, { aria: aria, onClick: function () { params[param] = !params[param]; syncKeyOn(); } });
+  k.shadow = k.b.style.boxShadow; k.param = param;
+  (ui.onOff = ui.onOff || []).push(k);
+  if (param === 'chromakeyEnabled') ui.keyOn = k;
   syncers.push(syncKeyOn);
   syncKeyOn();
 }
-// One control by id, its knob ring (or key cluster) centred on (cx, cy). o: fam, legend (room for Blend Mode's legend).
+// One control by id, its knob ring (or key cluster) centred on (cx, cy). o: fam, legend (false: no legend around a
+// stepped knob that has one, e.g. Blend Mode's).
 function makeItem(id, cx, cy, size, o) {
   o = o || {};
   if (id === 'camera') return makeCamera(cx, cy, o.fam);
-  if (id === 'keyOn') return makeChromaOn(cx, cy, size, o.fam);
+  if (id === 'keyOn') return makeOnOff(cx, cy, 'chromakeyEnabled', 'Chromakey');
+  if (id === 'x_lkOn') return makeOnOff(cx, cy, 'x_lkOn', 'Luma key');
   var c = CONTROLS[id], opts = Object.assign({ fam: o.fam }, c[1] || {});
   var k = knob(cx, cy, size, c[0], id, opts);
-  if (id === 'blendMode') { ui.blend = k; if (o.legend !== false) blendLegend(cx, cy, k.R); }
+  if (id === 'blendMode') ui.blend = k;
+  if (opts.legend && o.legend !== false) ringLegend(k, id, opts.legend, cx, cy);
   return k;
 }
 // A chip of the key colour, usually beside the Chromakey nameplate.
@@ -433,15 +502,17 @@ function buildPortraitPanel() {
 
   // Layers: the pad square against the right edge, the four layer controls in a 2 x 2 grid left of it.
   var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG;
-  secBox(lay, 'Layers', 'layers');
-  makePad(M + LW - PG - pad, ly + PG, pad);
-  gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'oscSize'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
+  if (page === 'adv') buildColorsEq(lay);
+  else {
+    secBox(lay, 'Layers', 'layers');
+    makePad(M + LW - PG - pad, ly + PG, pad);
+    gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'oscSize'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
+  }
 
-  // Right column: one vertical gap g shared by every window.
-  var wins = [['feedback', [['blendMode', 'modulateAmount'], ['feedback', 'delay']]],
-              ['chroma', [['keyOn', 'keyHue'], ['keySat', 'keyLight'], ['chromakeyThreshold', 'chromakeySoftness']]],
-              ['transform', [['zoom'], ['rotate'], ['translateX'], ['translateY'], ['hueDrift']]],
-              ['color', [['hue'], ['saturate'], ['brightness'], ['contrast']]]];
+  // Right column: one vertical gap g shared by every window. Each window's controls are its section's items in rows
+  // of two (Feedback, Chromakey) or one (Transform, Color).
+  var rows = function (fam, n) { var it = pageSec(fam).items, out = []; for (var r = 0; r < it.length; r += n) out.push(it.slice(r, r + n)); return [fam, out]; };
+  var wins = [rows('feedback', 2), rows('chroma', 2), rows('transform', 1), rows('color', 1)];
   var hs = wins.map(function (w) { return gridSize(w[1], ks); });
   var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc], sep = PG + tab;
   var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
@@ -452,10 +523,10 @@ function buildPortraitPanel() {
   y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
   [fb, ck, tr, co].forEach(function (b, k) {
     var fam = wins[k][0];
-    secBox(b, SECTIONS[fam].title, fam);
+    secBox(b, pageSec(fam).title, fam);
     gridIn(b, wins[k][1], ks, fam);
   });
-  makeSwatch(ck[0] + 8 + textW(SECTIONS.chroma.title, 10 * UL, 800, 0.1) + 16 + 10, ck[1] - 6 * UK);
+  if (page !== 'adv') makeSwatch(ck[0] + 8 + textW(SECTIONS.chroma.title, 10 * UL, 800, 0.1) + 16 + 10, ck[1] - 6 * UK);
 
   // Text is measured for the spacing; once the web font arrives, measure again.
   if (document.fonts && document.fonts.status !== 'loaded' && !fontsRebuild) {
@@ -477,12 +548,12 @@ function textW(t, px, weight, ls) {
 function itemExt(id, ks) {
   var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
   if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 30 * UK, bot: 35 + 20 * (UK - 1) + lab };
-  if (id === 'keyOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
-  var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab };
-  if (id === 'blendMode') {   // the legend around the ring
+  if (id === 'keyOn' || id === 'x_lkOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
+  var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab }, names = (CONTROLS[id][1] || {}).legend;
+  if (names) {   // the legend around the ring
     var r = R + 7 * UK, bh = 12 * UL;
-    BLEND_NAMES.forEach(function (n, i) {
-      var a = blendAngle(i) * Math.PI / 180, nw = textW(n, 9 * UL, 800, 0.12), side = Math.abs(Math.sin(a)) > 0.01;
+    names.forEach(function (n, i) {
+      var a = legendAngle(i, names.length) * Math.PI / 180, nw = textW(n, 9 * UL, 800, 0.12), side = Math.abs(Math.sin(a)) > 0.01;
       e.w = Math.max(e.w, 2 * (side ? Math.abs(r * Math.sin(a)) + nw : nw / 2));
       e.top = Math.max(e.top, side ? r * Math.cos(a) + bh / 2 : r + bh);
     });
@@ -523,8 +594,8 @@ function buildDefault(land) {
   var kn = NKEYS, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
   for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
   makeKeys(rects, 9);
-  buildLayers();
-  buildMix();
+  if (page === 'adv') buildColorsEq(box(M, LOW_Y, LW, LOW_B - LOW_Y));
+  else { buildLayers(); buildMix(); }
   buildRight();
 }
 
@@ -644,13 +715,13 @@ function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
   var ks = 42;
-  secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), 'Feedback', 'feedback');
+  secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), pageSec('feedback').title, 'feedback');
   var ck = box(RX, B(2) + 8, RW, B(5) - B(2) - 16);
-  secBox(ck, 'Chromakey', 'chroma');
-  secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Transform', 'transform');
-  secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), 'Color', 'color');
+  secBox(ck, pageSec('chroma').title, 'chroma');
+  secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), pageSec('transform').title, 'transform');
+  secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), pageSec('color').title, 'color');
   var place = function (fam, cols, row0) {
-    SECTIONS[fam].items.forEach(function (id, i) {
+    pageSec(fam).items.forEach(function (id, i) {
       var p = pt(cols[i % cols.length], cy(row0 + Math.floor(i / cols.length)));
       if (LAND && fam === 'feedback' && i < 2) p[0] += 24;   // room for the Blend Mode legend inside the window's left edge
       makeItem(id, p[0], p[1], ks, { fam: fam });
@@ -660,15 +731,108 @@ function buildRight() {
   place('chroma', [c1, c2], 2);
   place('transform', [c1], 5);
   place('color', [c2], 5);
-  makeSwatch(ck[0] + 116, ck[1] - 6);
+  if (page !== 'adv') makeSwatch(ck[0] + 116, ck[1] - 6);
+}
+
+// Colors (Advanced page, in Layers' place): a hue EQ that scales saturation band by band around the spectrum. Twelve
+// bands 30 degrees apart from red (eq0..eq11, 0-2x, 1 = unchanged) are joined by a smooth periodic curve (Catmull-Rom;
+// the shader samples the same curve at each pixel's hue), drawn over the spectrum on a glass screen. Drag across the
+// screen to draw the curve (each pointer position sets the band under it), use the wheel over a band to nudge it, and
+// double-click a band to flatten it. Flat resets every band; Bypass switches the EQ off and keeps the curve. b is the
+// window [x, y, w, h] in stage coordinates: a wide window puts the keys in a column left of the screen, a tall one
+// (landscape) in a row above it.
+function eqAt(h) {
+  var p = (((h % 1) + 1) % 1) * EQ_N, i = Math.floor(p), t = p - i;
+  var v = function (j) { return params['eq' + (((j % EQ_N) + EQ_N) % EQ_N)]; }, a = v(i - 1), b = v(i), c = v(i + 1), d = v(i + 2);
+  return Math.max(0, b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a))));
+}
+function eqActive() { if (params.eqBypass) return false; for (var i = 0; i < EQ_N; i++) if (params['eq' + i] !== 1) return true; return false; }
+function buildColorsEq(b) {
+  secBox(b, 'Colors', 'layers');
+  var wide = b[2] > b[3], kw = 104 * UK, kh = 28 * UK, top = b[1] + 9 * UL + PG, gx, gy, gw, gh, kx, ky, lab;
+  if (wide) {
+    gx = b[0] + PG + kw + PG; gy = b[1] + PG; gw = b[0] + b[2] - PG - gx; gh = b[3] - 2 * PG;
+    kx = [b[0] + PG, b[0] + PG]; ky = [b[1] + b[3] / 2 - kh - 4 * UK - 10 * UL, b[1] + b[3] / 2 + 4 * UK - 10 * UL];
+    lab = [b[0] + PG + kw / 2, ky[1] + kh + 12 * UK];
+  } else {
+    kw = (b[2] - 3 * PG) / 2; kx = [b[0] + PG, b[0] + 2 * PG + kw]; ky = [top, top];
+    gx = b[0] + PG; gy = top + kh + PG + 10 * UL + 8; gw = b[2] - 2 * PG; gh = b[1] + b[3] - PG - gy;
+    lab = [b[0] + b[2] / 2, top + kh + 8];
+  }
+  ui.eqFlat = key(kx[0], ky[0], kw, kh, 'Flat', null, { aria: 'Flatten the hue EQ', onClick: function () { for (var i = 0; i < EQ_N; i++) params['eq' + i] = 1; drawEq(); } });
+  ui.eqBypass = key(kx[1], ky[1], kw, kh, 'Bypass', 'off', { aria: 'Bypass the hue EQ', onClick: function () { params.eqBypass = !params.eqBypass; drawEq(); } });
+  var l = cl(lab[0], lab[1], 160 * UL, 'Hue · Sat EQ', LABEL()); l.className = 'knob-label'; l.dataset.fam = 'layers';
+  ui.eq = glass(gx, gy, gw, gh, 'Hue EQ: drag across to set the saturation of each hue band');
+  var g = ui.eq.g, band = function (e) { var r = g.getBoundingClientRect(); return { r: r, i: Math.max(0, Math.min(EQ_N - 1, Math.floor((e.clientX - r.left) / r.width * EQ_N))) }; };
+  var tipFor = function (i) { showTip(g, EQ_NAMES[i] + '  ' + params['eq' + i].toFixed(2) + '×'); };
+  var setFrom = function (e) {
+    var q = band(e), L = eqLayout(1), vy = (e.clientY - q.r.top) / q.r.height;
+    var v = Math.max(0, Math.min(2, (L.bot - vy) / (L.bot - L.top) * 2));
+    if (Math.abs(v - 1) < 0.04) v = 1;
+    params['eq' + q.i] = Math.round(v * 100) / 100; drawEq(); tipFor(q.i);
+  };
+  g.style.cursor = 'crosshair'; g.style.touchAction = 'none'; g.setAttribute('role', 'group');
+  g.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    e.preventDefault(); g.setPointerCapture(e.pointerId); dragging = true; setFrom(e);
+    var up = function () { dragging = false; hideTip(); g.removeEventListener('pointermove', setFrom); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); };
+    g.addEventListener('pointermove', setFrom); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  });
+  g.addEventListener('dblclick', function (e) { var q = band(e); params['eq' + q.i] = 1; drawEq(); tipFor(q.i); });
+  g.addEventListener('wheel', function (e) {
+    e.preventDefault(); var q = band(e), k = 'eq' + q.i;
+    params[k] = Math.max(0, Math.min(2, Math.round((params[k] + (e.deltaY > 0 ? -0.05 : 0.05)) * 100) / 100)); drawEq(); tipFor(q.i);
+  }, { passive: false });
+  g.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
+  syncers.push(drawEq);
+  drawEq();
+}
+// Plot area of the EQ screen as fractions of its height (h = 1) or in pixels: top and bottom of the 0-2x range, and the
+// spectrum strip under it.
+function eqLayout(h) { return { top: 0.09 * h, bot: 0.8 * h, strip: 0.86 * h, stripH: 0.1 * h }; }
+function drawEq() {
+  var E = ui.eq; if (!E) return;
+  var c = E.x, w = E.w, h = E.h, L = eqLayout(h), on = !params.eqBypass, yOf = function (v) { return L.bot - v / 2 * (L.bot - L.top); };
+  var hueAt = function (x) { return x / w - 0.5 / EQ_N; };   // band i is centred on its column
+  c.clearRect(0, 0, w, h);
+  var spec = c.createLinearGradient(0, 0, w, 0);
+  for (var s = 0; s <= 24; s++) spec.addColorStop(s / 24, 'hsl(' + Math.round(((hueAt(s / 24 * w) % 1) + 1) % 1 * 360) + ',85%,55%)');
+  // Grid: 0.5x / 1x / 1.5x lines, band dividers.
+  c.lineWidth = 2;
+  [0.5, 1, 1.5].forEach(function (v) { c.strokeStyle = v === 1 ? 'rgba(220,232,255,0.35)' : 'rgba(143,141,146,0.25)'; c.setLineDash(v === 1 ? [] : [6, 8]); c.beginPath(); c.moveTo(0, yOf(v)); c.lineTo(w, yOf(v)); c.stroke(); });
+  c.setLineDash([]); c.strokeStyle = 'rgba(143,141,146,0.12)';
+  for (var d = 1; d < EQ_N; d++) { c.beginPath(); c.moveTo(d / EQ_N * w, L.top); c.lineTo(d / EQ_N * w, L.bot); c.stroke(); }
+  // The curve, filled with the spectrum it acts on.
+  c.globalAlpha = on ? 1 : 0.35;
+  c.beginPath(); c.moveTo(0, L.bot);
+  for (var x = 0; x <= w; x += 4) c.lineTo(x, yOf(Math.min(2, eqAt(hueAt(x)))));
+  c.lineTo(w, L.bot); c.closePath();
+  c.save(); c.globalAlpha *= 0.28; c.fillStyle = spec; c.fill(); c.restore();
+  c.beginPath();
+  for (x = 0; x <= w; x += 4) c[x ? 'lineTo' : 'moveTo'](x, yOf(Math.min(2, eqAt(hueAt(x)))));
+  c.strokeStyle = P.accent; c.lineWidth = 4; c.shadowColor = P.accentGlow; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
+  // Band handles in their own hue.
+  for (var i = 0; i < EQ_N; i++) {
+    var hx = (i + 0.5) / EQ_N * w, hy = yOf(params['eq' + i]);
+    c.beginPath(); c.arc(hx, hy, Math.max(7, Math.min(13, w / EQ_N * 0.22)), 0, TAU);
+    c.fillStyle = 'hsl(' + i * 360 / EQ_N + ',90%,58%)'; c.fill(); c.strokeStyle = '#0b0b0c'; c.lineWidth = 3; c.stroke();
+  }
+  // Spectrum strip, desaturated by the curve above it.
+  c.fillStyle = spec; c.fillRect(0, L.strip, w, L.stripH);
+  for (x = 0; x < w; x += 4) { var k = Math.min(1, eqAt(hueAt(x))); if (k < 1) { c.fillStyle = 'rgba(128,128,128,' + (1 - k) + ')'; c.fillRect(x, L.strip, 4, L.stripH); } }
+  c.globalAlpha = 1;
+  if (!on) { c.font = '800 ' + Math.round(h * 0.11) + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif'; c.textAlign = 'center'; c.fillStyle = P.inkMute; c.fillText('BYPASS', w / 2, (L.top + L.bot) / 2 + h * 0.04); }
+  if (ui.eqBypass) ui.eqBypass.set(params.eqBypass ? 'on' : 'off');
+  E.g.setAttribute('aria-valuetext', EQ_NAMES.map(function (n, j) { return n + ' ' + params['eq' + j].toFixed(2); }).join(', '));
 }
 function syncKeyOn() {
-  var k = ui.keyOn; if (!k) return;
-  var on = !!params.chromakeyEnabled;
-  k.txt.textContent = on ? 'On' : 'Off';
-  k.b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  k.b.style.boxShadow = on ? k.shadow + ',0 0 14px 2px ' + P.accentGlow : k.shadow;
-  k.txt.style.color = on ? P.accent : '#b4b2b8'; k.txt.style.textShadow = on ? '0 0 7px ' + P.accentGlow : '';
+  (ui.onOff || []).forEach(function (k) {
+    var on = !!params[k.param];
+    k.txt.textContent = on ? 'On' : 'Off';
+    k.b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    k.b.style.boxShadow = on ? k.shadow + ',0 0 14px 2px ' + P.accentGlow : k.shadow;
+    k.txt.style.color = on ? P.accent : '#b4b2b8'; k.txt.style.textShadow = on ? '0 0 7px ' + P.accentGlow : '';
+  });
 }
 function syncKeySwatch() {
   if (!ui.keySwatch) return;
@@ -677,23 +841,26 @@ function syncKeySwatch() {
 }
 // Blend Mode positions printed around its knob like a rotary switch (left of the top, centred on it, right of it); tap
 // a name to pick it.
-function blendAngle(i) { return -135 + i * 270 / (BLEND_NAMES.length - 1); }
-function blendLegend(x, y, R) {
-  ui.blendLabs = BLEND_NAMES.map(function (n, i) {
-    var deg = blendAngle(i), a = deg * Math.PI / 180, r = R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a);
+function legendAngle(i, n) { return -135 + i * 270 / (n - 1); }
+function ringLegend(k, id, names, x, y) {
+  var labs = names.map(function (n, i) {
+    var deg = legendAngle(i, names.length), a = deg * Math.PI / 180, r = k.R + 7 * UK, lx = x + r * Math.sin(a), ly = y - r * Math.cos(a);
     var bw = 46 * UL, bh = 12 * UL, side = Math.abs(deg) < 1 ? 0 : deg < 0 ? -1 : 1;
     var s = el('span', at(side < 0 ? lx - bw : side > 0 ? lx : lx - bw / 2, side ? ly - bh / 2 : ly - bh, bw, bh) + ';text-align:' +
       (side < 0 ? 'right' : side > 0 ? 'left' : 'center') + ';' + PRINT(9 * UL) + ';cursor:pointer', panel, n);
-    s.addEventListener('click', function () { ui.blend.set(i / (BLEND_NAMES.length - 1)); });
+    s.addEventListener('click', function () { k.set(i / (names.length - 1)); });
     return s;
   });
+  (ui.legends = ui.legends || []).push({ id: id, labs: labs });
   syncBlendLegend();
 }
+// Light the selected name of every ring legend (Blend Mode's, the LFO's waveform).
 function syncBlendLegend() {
-  if (!ui.blendLabs) return;
-  ui.blendLabs.forEach(function (s, i) {
-    var on = i === params.blendMode;
-    s.style.color = on ? P.accent : P.inkMute; s.style.textShadow = on ? '0 0 6px ' + P.accentGlow : 'none';
+  (ui.legends || []).forEach(function (L) {
+    L.labs.forEach(function (s, i) {
+      var on = i === params[L.id];
+      s.style.color = on ? P.accent : P.inkMute; s.style.textShadow = on ? '0 0 6px ' + P.accentGlow : 'none';
+    });
   });
 }
 
@@ -894,6 +1061,8 @@ uniform float u_hue;
 uniform float u_saturate;
 uniform float u_brightness;
 uniform float u_contrast;
+uniform float u_satEq[12];   // hue EQ bands, 30 degrees apart from red
+uniform float u_eqOn;
 
 // chromakey
 uniform float u_chromakeyEnabled;
@@ -951,6 +1120,17 @@ vec3 saturateColor(vec3 c, float amount) {
   const vec3 W = vec3(0.2125, 0.7154, 0.0721);
   vec3 gray = vec3(dot(c, W));
   return mix(gray, c, amount);
+}
+
+// Hue EQ: saturation scaled by a smooth periodic curve through the 12 bands (Catmull-Rom), at the pixel's hue.
+float eqBand(int j) { return u_satEq[(j + 12) % 12]; }
+vec3 hueEq(vec3 c) {
+  c = clamp(c, 0.0, 1.0);
+  float p = rgb2hsv(c).x * 12.0, fi = floor(p), t = p - fi;
+  int i = int(fi);
+  float a = eqBand(i - 1), b = eqBand(i), d1 = eqBand(i + 1), d2 = eqBand(i + 2);
+  float k = max(0.0, b + 0.5 * t * (d1 - a + t * (2.0 * a - 5.0 * b + 4.0 * d1 - d2 + t * (3.0 * (b - d1) + d2 - a))));
+  return saturateColor(c, k);
 }
 
 vec3 brightnessColor(vec3 c, float amount) { return c + amount; }
@@ -1050,6 +1230,7 @@ void main() {
   vec4 result = blendFn(prev, gen, u_blendMode, u_feedback);
 
   result.rgb = saturateColor(result.rgb, u_saturate);
+  if (u_eqOn > 0.5) result.rgb = hueEq(result.rgb);
   result.rgb = brightnessColor(result.rgb, u_brightness);
   result.rgb = contrastColor(result.rgb, u_contrast);
   result.rgb = clamp(result.rgb, 0.0, 1.0);
@@ -1073,7 +1254,7 @@ var FEEDBACK_UNIFORMS = [
   'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
   'u_mix', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
-  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast',
+  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_satEq', 'u_eqOn',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
   'u_blendMode', 'u_modulateAmount'
 ];
@@ -1170,6 +1351,7 @@ window.addEventListener('beforeunload', function () { if (cam.stream) cam.stream
 // -------------------------------------------------------------
 // 7. Uniform upload + render loop
 // -------------------------------------------------------------
+var eqVals = new Float32Array(EQ_N);
 function uploadFeedbackUniforms(t) {
   var u = feedbackUniforms, w = mixWeights(), key = hslToRgb(params.keyHue, params.keySat, params.keyLight);
   gl.uniform1i(u.u_prevFrame, 0);
@@ -1196,6 +1378,9 @@ function uploadFeedbackUniforms(t) {
   gl.uniform1f(u.u_saturate, params.saturate);
   gl.uniform1f(u.u_brightness, params.brightness);
   gl.uniform1f(u.u_contrast, params.contrast);
+  for (var e = 0; e < EQ_N; e++) eqVals[e] = params['eq' + e];
+  gl.uniform1fv(u.u_satEq, eqVals);
+  gl.uniform1f(u.u_eqOn, eqActive() ? 1 : 0);
   gl.uniform1f(u.u_chromakeyEnabled, params.chromakeyEnabled ? 1 : 0);
   gl.uniform3f(u.u_chromakeyColor, key[0], key[1], key[2]);
   gl.uniform1f(u.u_chromakeyThreshold, params.chromakeyThreshold);
