@@ -24,7 +24,7 @@ window.addEventListener('error', function (e) { REPORT.push('ERROR ' + e.message
 // 1. Palette and UI kit
 // -------------------------------------------------------------
 var P = { ink: '#ebebeb', inkDim: '#a6a4a8', inkMute: '#8f8d92', line: '#515053', accent: '#dce8ff', accentGlow: 'rgba(160,195,255,0.8)', accent3: '#af78ed', select: '#eded78',
-  rec: '#f0484a', off: '#3d3b40', byp: '#3568b8', tabSub: '#333236', idle: '#77757b' };
+  rec: '#f0484a', off: '#3d3b40', mod: '#ff9a3c', modGlow: 'rgba(255,154,60,0.75)', byp: '#3568b8', tabSub: '#333236', idle: '#77757b' };
 var ICON_GREEN = '#3fbf6a';
 var TAU = Math.PI * 2;
 function clamp(v, a, b) { a = a == null ? 0 : a; b = b == null ? 1 : b; return v < a ? a : v > b ? b : v; }
@@ -172,12 +172,13 @@ function knob(x, y, size, label, key, o) {
     if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { k.set(clamp(k.v - st)); e.preventDefault(); }
   });
   syncers.push(k.sync);
+  (ui.knobs = ui.knobs || {})[key] = { ring: ring, R: R, x: x, y: y };   // for LFO target picking and modulation dots
   return k;
 }
 
 // Rubber key. led: on / sel / rec / off / null. o: glyph, fs, onClick, aria, tint ('blue': no LED, the whole key lights),
 // noLed (the state is kept, and shown only as aria-pressed).
-var LED = { on: P.accent, sel: P.select, rec: P.rec, off: P.off };
+var LED = { on: P.accent, sel: P.select, rec: P.rec, off: P.off, mod: P.mod };
 var TINT = {
   blue: { on: ['linear-gradient(to bottom,#5b8fe0,#3568b8)', '0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.3)', '#ffffff'],
           off: ['linear-gradient(to bottom,#2e3c55,#222d40)', '0 2px 0 #0f0e10,0 4px 7px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.06)', '#7d8cab'] }
@@ -261,34 +262,21 @@ var PD = {
   noiseScale: { min: 0.5, max: 20, def: 4, step: 0.1, f: function (v) { return v.toFixed(1); } },
   shapeSides: { min: 3, max: 12, def: 5, step: 1, f: function (v) { return v + ' sides'; } }
 };
-// Advanced page (experimental): placeholder modules, named and ranged like a video synthesizer's, whose knobs turn
-// but drive nothing yet (x_ prefix). The Colors hue EQ there is live (eq0..eq11 below).
-var LFO_WAVES = ['Sine', 'Tri', 'Saw', 'Square', 'S&H'], CLOCK_DIVS = ['1/1', '1/2', '1/4', '1/8', '1/16'];
-Object.assign(PD, {
-  x_lfoWave: { min: 0, max: 4, def: 0, zero: 0, step: 1, f: function (v) { return LFO_WAVES[v]; } },
-  x_lfoRate: { min: 0.02, max: 20, def: 1, log: true, step: 0.01, f: function (v) { return v.toFixed(2) + ' Hz'; } },
-  x_lfoDepth: { min: 0, max: 1, def: 0.5, step: 0.01, f: pct },
-  x_lfoPhase: { min: 0, max: 360, def: 0, step: 1, f: deg },
-  x_lkLow: { min: 0, max: 1, def: 0.2, step: 0.01, f: pct },
-  x_lkHigh: { min: 0, max: 1, def: 0.8, step: 0.01, f: pct },
-  x_lkSoft: { min: 0, max: 0.5, def: 0.1, step: 0.005, f: function (v) { return v.toFixed(3); } },
-  x_lkFillHue: { min: 0, max: 360, def: 200, step: 1, f: deg },
-  x_lkFillSat: { min: 0, max: 1, def: 0.6, step: 0.01, f: pct },
-  x_kalSeg: { min: 2, max: 16, def: 6, step: 1, f: function (v) { return v + ' segments'; } },
-  x_kalAngle: { min: 0, max: 360, def: 0, step: 1, f: deg },
-  x_kalX: { min: -0.5, max: 0.5, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v * 100, 1) + '%'; } },
-  x_kalY: { min: -0.5, max: 0.5, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v * 100, 1) + '%'; } },
-  x_kalSpin: { min: -1, max: 1, def: 0, step: 0.01, snap: 0, f: function (v) { return sgn(v, 2) + ' rev/s'; } },
-  x_clkTempo: { min: 40, max: 240, def: 120, step: 1, f: function (v) { return v + ' BPM'; } },
-  x_clkDiv: { min: 0, max: 4, def: 2, zero: 0, step: 1, f: function (v) { return CLOCK_DIVS[v]; } },
-  x_clkSwing: { min: 0, max: 0.75, def: 0, step: 0.01, f: pct },
-  x_clkSteps: { min: 1, max: 16, def: 8, step: 1, f: function (v) { return v + (v === 1 ? ' step' : ' steps'); } }
-});
+// Advanced page (experimental): four LFOs, each with a waveform, a speed, a depth and a target (one of the Main page's
+// knobs, or none). Depth is a share of the target knob's sweep, peak to peak, around where the knob is set.
+var LFO_N = 4, LFO_WAVES = ['Sine', 'Tri', 'Saw', 'Square', 'S&H'];
+var LFO_DEF = { wave: [0, 1, 2, 4], rate: [0.1, 0.25, 0.5, 1] };
+for (var q = 0; q < LFO_N; q++) {
+  PD['lfo' + q + 'Wave'] = { min: 0, max: 4, def: LFO_DEF.wave[q], zero: 0, step: 1, f: function (v) { return LFO_WAVES[v]; } };
+  PD['lfo' + q + 'Rate'] = { min: 0.02, max: 20, def: LFO_DEF.rate[q], log: true, step: 0.01, f: function (v) { return v.toFixed(2) + ' Hz'; } };
+  PD['lfo' + q + 'Depth'] = { min: 0, max: 1, def: 0.3, step: 0.01, f: pct };
+}
 // Fixed generator settings that no longer have knobs.
 var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
 var EQ_N = 12, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Lime', 'Green', 'Spring', 'Cyan', 'Azure', 'Blue', 'Violet', 'Magenta', 'Rose'];
-var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75, eqBypass: false, x_lkOn: false };
-for (var q = 0; q < EQ_N; q++) DEFAULTS['eq' + q] = 1;
+var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
+for (q = 0; q < EQ_N; q++) DEFAULTS['eq' + q] = 1;
+for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
 // Camera layer state (not a preset parameter): facing 'user' (front, mirrored) or 'environment' (back).
@@ -344,11 +332,9 @@ var CONTROLS = {
   zoom: ['Zoom'], rotate: ['Rotate'], translateX: ['Shift X'], translateY: ['Shift Y'], hueDrift: ['Hue Drift'],
   hue: ['Hue'], saturate: ['Saturation'], brightness: ['Brightness'], contrast: ['Contrast'],
   camera: ['Camera'], oscSize: ['Osc Size'], noiseScale: ['Noise Scale'], shapeSides: ['Shape Sides', { ticks: 10, after: function () { drawPad(); } }],
-  // Advanced page
-  x_lfoWave: ['Waveform', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: LFO_WAVES }], x_lfoRate: ['Rate'], x_lfoDepth: ['Depth'], x_lfoPhase: ['Phase'],
-  x_lkOn: [''], x_lkLow: ['Low Clip'], x_lkHigh: ['High Clip'], x_lkSoft: ['Softness'], x_lkFillHue: ['Fill Hue'], x_lkFillSat: ['Fill Sat'],
-  x_kalSeg: ['Segments', { ticks: 15 }], x_kalAngle: ['Angle'], x_kalX: ['Center X'], x_kalY: ['Center Y'], x_kalSpin: ['Spin'],
-  x_clkTempo: ['Tempo'], x_clkDiv: ['Division', { ticks: 5, range: 90 }], x_clkSwing: ['Swing'], x_clkSteps: ['Steps', { ticks: 16 }]
+  // Advanced page: the LFOs' knobs (their waveforms are picked on a small screen, their targets with a key)
+  lfo0Rate: ['Speed'], lfo1Rate: ['Speed'], lfo2Rate: ['Speed'], lfo3Rate: ['Speed'],
+  lfo0Depth: ['Depth'], lfo1Depth: ['Depth'], lfo2Depth: ['Depth'], lfo3Depth: ['Depth']
 };
 var SECTIONS = {
   feedback: { title: 'Feedback', items: ['blendMode', 'modulateAmount', 'feedback', 'delay'] },
@@ -358,21 +344,19 @@ var SECTIONS = {
   layers: { title: 'Layers', items: ['camera', 'oscSize', 'noiseScale', 'shapeSides'] },
   mix: { title: 'Mix', items: [] }
 };
-// The Advanced page (experimental) keeps every window where it is and swaps what is in it: Colors (a hue EQ) for
-// Layers, and placeholder modules (LFO, Luma Key, Kaleido, Clock) for the effect windows. The windows keep their
-// families' colours. The Main / Advanced tab at the top right of the screen switches; the choice is kept.
-var ADV_SECTIONS = {
-  feedback: { title: 'LFO', items: ['x_lfoWave', 'x_lfoRate', 'x_lfoDepth', 'x_lfoPhase'] },
-  chroma: { title: 'Luma Key', items: ['x_lkOn', 'x_lkLow', 'x_lkHigh', 'x_lkSoft', 'x_lkFillHue', 'x_lkFillSat'] },
-  transform: { title: 'Kaleido', items: ['x_kalSeg', 'x_kalAngle', 'x_kalX', 'x_kalY', 'x_kalSpin'] },
-  color: { title: 'Clock', items: ['x_clkTempo', 'x_clkDiv', 'x_clkSwing', 'x_clkSteps'] },
-  layers: { title: 'Colors', items: [] }
-};
+// Knobs an LFO can drive: every knob on the Main page.
+var LFO_TARGETS = {};
+Object.keys(SECTIONS).forEach(function (f) { SECTIONS[f].items.forEach(function (id) { if (PD[id]) LFO_TARGETS[id] = 1; }); });
+// The Advanced page (experimental): the Colors hue EQ along the whole bottom; above it on the right, the LFO window
+// (four oscillators over their four target keys, in the green Chromakey family colours) and the Mix window (the XY
+// pad, in the purple Transform family colours). The Main / Advanced tab at the top right of the screen switches; the
+// choice is kept. pickLfo >= 0 while the Main page is open to pick that LFO's target.
 var page = 'main';
 try { if (localStorage.getItem('vfv-page') === 'adv') page = 'adv'; } catch (e) { /* main */ }
-function pageSec(fam) { return (page === 'adv' ? ADV_SECTIONS : SECTIONS)[fam]; }
+var pickLfo = -1;
 function setPage(p) {
   page = p === 'adv' ? 'adv' : 'main';
+  if (page === 'adv') pickLfo = -1;
   try { localStorage.setItem('vfv-page', page); } catch (e) { /* not kept */ }
   build(); scaleStage();
 }
@@ -455,7 +439,6 @@ function makeItem(id, cx, cy, size, o) {
   o = o || {};
   if (id === 'camera') return makeCamera(cx, cy, o.fam);
   if (id === 'keyOn') return makeOnOff(cx, cy, 'chromakeyEnabled', 'Chromakey');
-  if (id === 'x_lkOn') return makeOnOff(cx, cy, 'x_lkOn', 'Luma key');
   var c = CONTROLS[id], opts = Object.assign({ fam: o.fam }, c[1] || {});
   var k = knob(cx, cy, size, c[0], id, opts);
   if (id === 'blendMode') ui.blend = k;
@@ -501,32 +484,37 @@ function buildPortraitPanel() {
   makeKeys(rects, 10 * UL);
 
   // Layers: the pad square against the right edge, the four layer controls in a 2 x 2 grid left of it.
-  var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG;
-  if (page === 'adv') buildColorsEq(lay);
-  else {
+  var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG, sep = PG + tab;
+  if (page === 'adv') {
+    // Advanced: Colors across the whole bottom, the Mix window square at the foot of the right column (level with the
+    // header keys), the LFO window above it.
+    var my = ly - sep - RW - tab;
+    buildAdvanced([M, ly, SW - 2 * M, LOW_B - ly], [RX, top0, RW, my - sep - top0], [RX, my, RW, RW + tab], PG);
+  } else {
     secBox(lay, 'Layers', 'layers');
     makePad(M + LW - PG - pad, ly + PG, pad);
     gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'oscSize'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
-  }
 
-  // Right column: one vertical gap g shared by every window. Each window's controls are its section's items in rows
-  // of two (Feedback, Chromakey) or one (Transform, Color).
-  var rows = function (fam, n) { var it = pageSec(fam).items, out = []; for (var r = 0; r < it.length; r += n) out.push(it.slice(r, r + n)); return [fam, out]; };
-  var wins = [rows('feedback', 2), rows('chroma', 2), rows('transform', 1), rows('color', 1)];
-  var hs = wins.map(function (w) { return gridSize(w[1], ks); });
-  var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc], sep = PG + tab;
-  var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
-  var g = (LOW_B - top0 - used) / stack.reduce(function (a, z) { return a + z.n + 1; }, 0);
-  var hOf = function (z) { return tab + z.h + (z.n + 1) * g; };
-  var y = top0, fb = [RX, y, RW, hOf(hs[0])];
-  y += fb[3] + sep; var ck = [RX, y, RW, hOf(hs[1])];
-  y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
-  [fb, ck, tr, co].forEach(function (b, k) {
-    var fam = wins[k][0];
-    secBox(b, pageSec(fam).title, fam);
-    gridIn(b, wins[k][1], ks, fam);
-  });
-  if (page !== 'adv') makeSwatch(ck[0] + 8 + textW(SECTIONS.chroma.title, 10 * UL, 800, 0.1) + 16 + 10, ck[1] - 6 * UK);
+    // Right column: one vertical gap g shared by every window. Each window's controls are its section's items in rows
+    // of two (Feedback, Chromakey) or one (Transform, Color).
+    var rows = function (fam, n) { var it = SECTIONS[fam].items, out = []; for (var r = 0; r < it.length; r += n) out.push(it.slice(r, r + n)); return [fam, out]; };
+    var wins = [rows('feedback', 2), rows('chroma', 2), rows('transform', 1), rows('color', 1)];
+    var hs = wins.map(function (w) { return gridSize(w[1], ks); });
+    var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc];
+    var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
+    var g = (LOW_B - top0 - used) / stack.reduce(function (a, z) { return a + z.n + 1; }, 0);
+    var hOf = function (z) { return tab + z.h + (z.n + 1) * g; };
+    var y = top0, fb = [RX, y, RW, hOf(hs[0])];
+    y += fb[3] + sep; var ck = [RX, y, RW, hOf(hs[1])];
+    y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
+    [fb, ck, tr, co].forEach(function (b, k) {
+      var fam = wins[k][0];
+      secBox(b, SECTIONS[fam].title, fam);
+      gridIn(b, wins[k][1], ks, fam);
+    });
+    makeSwatch(ck[0] + 8 + textW(SECTIONS.chroma.title, 10 * UL, 800, 0.1) + 16 + 10, ck[1] - 6 * UK);
+  }
+  afterPanel();
 
   // Text is measured for the spacing; once the web font arrives, measure again.
   if (document.fonts && document.fonts.status !== 'loaded' && !fontsRebuild) {
@@ -548,7 +536,7 @@ function textW(t, px, weight, ls) {
 function itemExt(id, ks) {
   var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
   if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 30 * UK, bot: 35 + 20 * (UK - 1) + lab };
-  if (id === 'keyOn' || id === 'x_lkOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
+  if (id === 'keyOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
   var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab }, names = (CONTROLS[id][1] || {}).legend;
   if (names) {   // the legend around the ring
     var r = R + 7 * UK, bh = 12 * UL;
@@ -594,9 +582,13 @@ function buildDefault(land) {
   var kn = NKEYS, kg = 10, rects = [], kh = (LW - (kn - 1) * kg) / kn;
   for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
   makeKeys(rects, 9);
-  if (page === 'adv') buildColorsEq(box(M, LOW_Y, LW, LOW_B - LOW_Y));
-  else { buildLayers(); buildMix(); }
-  buildRight();
+  if (page === 'adv') {
+    // Advanced: the portrait arrangement transposed. Colors runs the full height of the right edge, the LFO and Mix
+    // windows share the band along the bottom (Mix square, against Colors).
+    var eq = box(M, LOW_Y, 900 - 2 * M, LOW_B - LOW_Y), band = box(RX, 16, RW, LOW_Y - 32), mx = band[0] + band[2] - RW;
+    buildAdvanced(eq, [band[0], band[1], mx - 16 - band[0], RW], [mx, band[1], RW, RW], 16);
+  } else { buildLayers(); buildMix(); buildRight(); }
+  afterPanel();
 }
 
 // Layers: one control per mixer corner, laid out 2 x 2 like the pad beside it (transposed with it in landscape). The
@@ -715,13 +707,13 @@ function buildRight() {
   var c1 = RX + RW / 4, c2 = RX + 3 * RW / 4, mid = RX + RW / 2;
   var B = function (k) { return ROW_Y0 + ROW_P * k; }, cy = function (i) { return ROW_Y0 + ROW_P * (i + 0.5); };
   var ks = 42;
-  secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), pageSec('feedback').title, 'feedback');
+  secBox(box(RX, B(0) + 8, RW, B(2) - B(0) - 16), SECTIONS.feedback.title, 'feedback');
   var ck = box(RX, B(2) + 8, RW, B(5) - B(2) - 16);
-  secBox(ck, pageSec('chroma').title, 'chroma');
-  secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), pageSec('transform').title, 'transform');
-  secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), pageSec('color').title, 'color');
+  secBox(ck, SECTIONS.chroma.title, 'chroma');
+  secBox(box(RX, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), SECTIONS.transform.title, 'transform');
+  secBox(box(mid + 8, B(5) + 8, RW / 2 - 8, B(10) - B(5) - 16), SECTIONS.color.title, 'color');
   var place = function (fam, cols, row0) {
-    pageSec(fam).items.forEach(function (id, i) {
+    SECTIONS[fam].items.forEach(function (id, i) {
       var p = pt(cols[i % cols.length], cy(row0 + Math.floor(i / cols.length)));
       if (LAND && fam === 'feedback' && i < 2) p[0] += 24;   // room for the Blend Mode legend inside the window's left edge
       makeItem(id, p[0], p[1], ks, { fam: fam });
@@ -734,40 +726,42 @@ function buildRight() {
   if (page !== 'adv') makeSwatch(ck[0] + 116, ck[1] - 6);
 }
 
-// Colors (Advanced page, in Layers' place): a hue EQ that scales saturation band by band around the spectrum. Twelve
-// bands 30 degrees apart from red (eq0..eq11, 0-2x, 1 = unchanged) are joined by a smooth periodic curve (Catmull-Rom;
-// the shader samples the same curve at each pixel's hue), drawn over the spectrum on a glass screen. Drag across the
-// screen to draw the curve (each pointer position sets the band under it), use the wheel over a band to nudge it, and
-// double-click a band to flatten it. Flat resets every band; Bypass switches the EQ off and keeps the curve. b is the
-// window [x, y, w, h] in stage coordinates: a wide window puts the keys in a column left of the screen, a tall one
-// (landscape) in a row above it.
+// Advanced page: Colors (eq), the LFO window (lfo) and the Mix window holding the XY pad (mix), each [x, y, w, h] in
+// stage coordinates; m is the margin inside a window (below the nameplate at the top).
+function buildAdvanced(eq, lfo, mix, m) {
+  buildColorsEq(eq, m);
+  buildLfo(lfo, m);
+  secBox(mix, 'Mix', 'transform');
+  var tab = 9 * UL, s = Math.min(mix[2] - 2 * m, mix[3] - tab - 2 * m);
+  makePad(mix[0] + (mix[2] - s) / 2, mix[1] + tab + m + (mix[3] - tab - 2 * m - s) / 2, s);
+}
+
+// Colors (Advanced page): a hue EQ that scales saturation band by band around the spectrum. Twelve bands 30 degrees
+// apart from red (eq0..eq11, 0-2x, 1 = unchanged) are joined by a smooth periodic curve (Catmull-Rom; the shader
+// samples the same curve at each pixel's hue), drawn over the spectrum on a glass screen that fills the window. Drag
+// across the screen to draw the curve (each pointer position sets the band under it), use the wheel over a band to
+// nudge it, double-click a band to flatten it, and double-click the spectrum strip to flatten every band. In a tall
+// window (landscape) the screen is drawn turned a quarter: hue runs downwards and saturation to the right.
 function eqAt(h) {
   var p = (((h % 1) + 1) % 1) * EQ_N, i = Math.floor(p), t = p - i;
   var v = function (j) { return params['eq' + (((j % EQ_N) + EQ_N) % EQ_N)]; }, a = v(i - 1), b = v(i), c = v(i + 1), d = v(i + 2);
   return Math.max(0, b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a))));
 }
-function eqActive() { if (params.eqBypass) return false; for (var i = 0; i < EQ_N; i++) if (params['eq' + i] !== 1) return true; return false; }
-function buildColorsEq(b) {
+function eqActive() { for (var i = 0; i < EQ_N; i++) if (params['eq' + i] !== 1) return true; return false; }
+function buildColorsEq(b, m) {
   secBox(b, 'Colors', 'layers');
-  var wide = b[2] > b[3], kw = 104 * UK, kh = 28 * UK, top = b[1] + 9 * UL + PG, gx, gy, gw, gh, kx, ky, lab;
-  if (wide) {
-    gx = b[0] + PG + kw + PG; gy = b[1] + PG; gw = b[0] + b[2] - PG - gx; gh = b[3] - 2 * PG;
-    kx = [b[0] + PG, b[0] + PG]; ky = [b[1] + b[3] / 2 - kh - 4 * UK - 10 * UL, b[1] + b[3] / 2 + 4 * UK - 10 * UL];
-    lab = [b[0] + PG + kw / 2, ky[1] + kh + 12 * UK];
-  } else {
-    kw = (b[2] - 3 * PG) / 2; kx = [b[0] + PG, b[0] + 2 * PG + kw]; ky = [top, top];
-    gx = b[0] + PG; gy = top + kh + PG + 10 * UL + 8; gw = b[2] - 2 * PG; gh = b[1] + b[3] - PG - gy;
-    lab = [b[0] + b[2] / 2, top + kh + 8];
-  }
-  ui.eqFlat = key(kx[0], ky[0], kw, kh, 'Flat', null, { aria: 'Flatten the hue EQ', onClick: function () { for (var i = 0; i < EQ_N; i++) params['eq' + i] = 1; drawEq(); } });
-  ui.eqBypass = key(kx[1], ky[1], kw, kh, 'Bypass', 'off', { aria: 'Bypass the hue EQ', onClick: function () { params.eqBypass = !params.eqBypass; drawEq(); } });
-  var l = cl(lab[0], lab[1], 160 * UL, 'Hue · Sat EQ', LABEL()); l.className = 'knob-label'; l.dataset.fam = 'layers';
-  ui.eq = glass(gx, gy, gw, gh, 'Hue EQ: drag across to set the saturation of each hue band');
-  var g = ui.eq.g, band = function (e) { var r = g.getBoundingClientRect(); return { r: r, i: Math.max(0, Math.min(EQ_N - 1, Math.floor((e.clientX - r.left) / r.width * EQ_N))) }; };
+  var T = b[3] > b[2], gy = b[1] + 9 * UL + m;
+  ui.eq = glass(b[0] + m, gy, b[2] - 2 * m, b[1] + b[3] - m - gy, 'Hue EQ: drag across to set the saturation of each hue band; double-click the spectrum strip to flatten them all');
+  ui.eqT = T;
+  var g = ui.eq.g;
+  // Band under the pointer and its height on the plot (vy: 0 at the top of the screen, 1 at the bottom, as unturned).
+  var band = function (e) {
+    var r = g.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    return { i: Math.max(0, Math.min(EQ_N - 1, Math.floor((T ? fy : fx) * EQ_N))), vy: T ? 1 - fx : fy };
+  };
   var tipFor = function (i) { showTip(g, EQ_NAMES[i] + '  ' + params['eq' + i].toFixed(2) + '×'); };
   var setFrom = function (e) {
-    var q = band(e), L = eqLayout(1), vy = (e.clientY - q.r.top) / q.r.height;
-    var v = Math.max(0, Math.min(2, (L.bot - vy) / (L.bot - L.top) * 2));
+    var q = band(e), L = eqLayout(1), v = clamp((L.bot - q.vy) / (L.bot - L.top) * 2, 0, 2);
     if (Math.abs(v - 1) < 0.04) v = 1;
     params['eq' + q.i] = Math.round(v * 100) / 100; drawEq(); tipFor(q.i);
   };
@@ -778,23 +772,28 @@ function buildColorsEq(b) {
     var up = function () { dragging = false; hideTip(); g.removeEventListener('pointermove', setFrom); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); };
     g.addEventListener('pointermove', setFrom); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
   });
-  g.addEventListener('dblclick', function (e) { var q = band(e); params['eq' + q.i] = 1; drawEq(); tipFor(q.i); });
+  g.addEventListener('dblclick', function (e) {
+    var q = band(e);
+    if (q.vy > eqLayout(1).strip - 0.03) { for (var i = 0; i < EQ_N; i++) params['eq' + i] = 1; drawEq(); flashTip(g, 'EQ flat'); }
+    else { params['eq' + q.i] = 1; drawEq(); tipFor(q.i); }
+  });
   g.addEventListener('wheel', function (e) {
     e.preventDefault(); var q = band(e), k = 'eq' + q.i;
-    params[k] = Math.max(0, Math.min(2, Math.round((params[k] + (e.deltaY > 0 ? -0.05 : 0.05)) * 100) / 100)); drawEq(); tipFor(q.i);
+    params[k] = clamp(Math.round((params[k] + (e.deltaY > 0 ? -0.05 : 0.05)) * 100) / 100, 0, 2); drawEq(); tipFor(q.i);
   }, { passive: false });
   g.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
   syncers.push(drawEq);
   drawEq();
 }
 // Plot area of the EQ screen as fractions of its height (h = 1) or in pixels: top and bottom of the 0-2x range, and the
-// spectrum strip under it.
+// spectrum strip under it. Heights are along the unturned screen (across a turned one).
 function eqLayout(h) { return { top: 0.09 * h, bot: 0.8 * h, strip: 0.86 * h, stripH: 0.1 * h }; }
 function drawEq() {
   var E = ui.eq; if (!E) return;
-  var c = E.x, w = E.w, h = E.h, L = eqLayout(h), on = !params.eqBypass, yOf = function (v) { return L.bot - v / 2 * (L.bot - L.top); };
+  var c = E.x, w = ui.eqT ? E.h : E.w, h = ui.eqT ? E.w : E.h, L = eqLayout(h), yOf = function (v) { return L.bot - v / 2 * (L.bot - L.top); };
   var hueAt = function (x) { return x / w - 0.5 / EQ_N; };   // band i is centred on its column
-  c.clearRect(0, 0, w, h);
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, E.w, E.h);
+  if (ui.eqT) c.setTransform(0, 1, -1, 0, E.w, 0);   // turned: x (hue) runs down the screen, y (level) right to left
   var spec = c.createLinearGradient(0, 0, w, 0);
   for (var s = 0; s <= 24; s++) spec.addColorStop(s / 24, 'hsl(' + Math.round(((hueAt(s / 24 * w) % 1) + 1) % 1 * 360) + ',85%,55%)');
   // Grid: 0.5x / 1x / 1.5x lines, band dividers.
@@ -803,11 +802,10 @@ function drawEq() {
   c.setLineDash([]); c.strokeStyle = 'rgba(143,141,146,0.12)';
   for (var d = 1; d < EQ_N; d++) { c.beginPath(); c.moveTo(d / EQ_N * w, L.top); c.lineTo(d / EQ_N * w, L.bot); c.stroke(); }
   // The curve, filled with the spectrum it acts on.
-  c.globalAlpha = on ? 1 : 0.35;
   c.beginPath(); c.moveTo(0, L.bot);
   for (var x = 0; x <= w; x += 4) c.lineTo(x, yOf(Math.min(2, eqAt(hueAt(x)))));
   c.lineTo(w, L.bot); c.closePath();
-  c.save(); c.globalAlpha *= 0.28; c.fillStyle = spec; c.fill(); c.restore();
+  c.save(); c.globalAlpha = 0.28; c.fillStyle = spec; c.fill(); c.restore();
   c.beginPath();
   for (x = 0; x <= w; x += 4) c[x ? 'lineTo' : 'moveTo'](x, yOf(Math.min(2, eqAt(hueAt(x)))));
   c.strokeStyle = P.accent; c.lineWidth = 4; c.shadowColor = P.accentGlow; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
@@ -820,10 +818,220 @@ function drawEq() {
   // Spectrum strip, desaturated by the curve above it.
   c.fillStyle = spec; c.fillRect(0, L.strip, w, L.stripH);
   for (x = 0; x < w; x += 4) { var k = Math.min(1, eqAt(hueAt(x))); if (k < 1) { c.fillStyle = 'rgba(128,128,128,' + (1 - k) + ')'; c.fillRect(x, L.strip, 4, L.stripH); } }
-  c.globalAlpha = 1;
-  if (!on) { c.font = '800 ' + Math.round(h * 0.11) + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif'; c.textAlign = 'center'; c.fillStyle = P.inkMute; c.fillText('BYPASS', w / 2, (L.top + L.bot) / 2 + h * 0.04); }
-  if (ui.eqBypass) ui.eqBypass.set(params.eqBypass ? 'on' : 'off');
+  c.setTransform(1, 0, 0, 1, 0, 0);
   E.g.setAttribute('aria-valuetext', EQ_NAMES.map(function (n, j) { return n + ' ' + params['eq' + j].toFixed(2); }).join(', '));
+}
+
+// LFO window (Advanced page): four oscillators above their four target keys. Each oscillator has a waveform screen (tap
+// it to step through Sine, Tri, Saw, Square and S&H; the wheel and arrow keys step too) showing the wave and where the
+// LFO is in its cycle, and Speed and Depth knobs. A target key names the knob that LFO drives; tapping it opens the Main
+// page to pick one (pickLfo). Tall window (portrait): one oscillator per row, the target keys 2 x 2 under a Targets
+// rule. Wide window (landscape): one LFO per column, its target key at the foot.
+function buildLfo(b, m) {
+  secBox(b, 'LFO', 'chroma');
+  ui.lfoWave = []; ui.lfoTarget = [];
+  var ks = 42 * UK, tab = 9 * UL, er = itemExt('lfo0Rate', ks), ed = itemExt('lfo0Depth', ks), kh = 28 * UK, i, x;
+  var top = Math.max(er.top, ed.top), rowH = top + Math.max(er.bot, ed.bot);
+  var knobs = function (i, xr, xd, y) {
+    makeItem('lfo' + i + 'Rate', xr, y, ks, { fam: 'chroma' });
+    makeItem('lfo' + i + 'Depth', xd, y, ks, { fam: 'chroma' });
+  };
+  if (b[3] > b[2]) {
+    var kg = 8 * UK, kw = (b[2] - 3 * m) / 2, keysTop = b[1] + b[3] - m - 2 * kh - kg, lh = 10 * UL, ruleY = keysTop - m - lh / 2;
+    var sw = 84 * UK, xs = spread(b[0], b[0] + b[2], [sw, er.w, ed.w]), ys = spread(b[1] + tab, ruleY - lh / 2, [rowH, rowH, rowH, rowH]);
+    for (i = 0; i < LFO_N; i++) {
+      makeLfoWave(i, xs[0], ys[i], sw, rowH);
+      knobs(i, xs[1] + er.w / 2, xs[2] + ed.w / 2, ys[i] + top);
+      makeLfoTarget(i, b[0] + m + (i % 2) * (kw + m), keysTop + Math.floor(i / 2) * (kh + kg), kw, kh);
+    }
+    lfoRule(b, ruleY, lh, m);
+  } else {
+    var g = 16 * UK, cw = (b[2] - (LFO_N + 1) * g) / LFO_N, sh = Math.round(rowH * 0.85), vy = spread(b[1] + tab, b[1] + b[3], [sh, rowH, kh]);
+    for (i = 0; i < LFO_N; i++) {
+      x = b[0] + g + i * (cw + g);
+      makeLfoWave(i, x, vy[0], cw, sh);
+      knobs(i, x + cw / 4, x + 3 * cw / 4, vy[1] + top);
+      makeLfoTarget(i, x, vy[2], cw, kh);
+    }
+  }
+  syncers.push(syncLfo); syncLfo();
+}
+// The "Targets" rule across the LFO window, centred on y. Its parts are knob-label so the Style Lab colours them.
+function lfoRule(b, y, lh, m) {
+  var t = 'Targets', tw = textW(t, 10 * UL, 700, 0.1) + 20 * UK, cx = b[0] + b[2] / 2;
+  var lab = cl(cx, y - lh / 2, tw, t, LABEL()); lab.className = 'knob-label'; lab.dataset.fam = 'chroma';
+  [[b[0] + m, cx - tw / 2], [cx + tw / 2, b[0] + b[2] - m]].forEach(function (s) {
+    var d = el('div', at(s[0], y - 1, s[1] - s[0], 2) + ';border-radius:1px;background:currentColor;opacity:0.4;color:' + P.inkDim);
+    d.className = 'knob-label'; d.dataset.fam = 'chroma';
+  });
+}
+function makeLfoWave(i, x, y, w, h) {
+  var G = glass(x, y, w, h, ''), g = G.g, wk = 'lfo' + i + 'Wave', last = 0;
+  var step = function (d) { params[wk] = (params[wk] + d + LFO_WAVES.length) % LFO_WAVES.length; drawLfoWaves(); flashTip(g, 'LFO ' + (i + 1) + '  ' + LFO_WAVES[params[wk]]); };
+  g.style.cursor = 'pointer'; g.setAttribute('role', 'button'); g.tabIndex = 0;
+  g.addEventListener('click', function () { step(1); });
+  g.addEventListener('wheel', function (e) {   // one step per flick, not per wheel event
+    e.preventDefault(); var now = performance.now(); if (now - last < 180) return; last = now; step(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+  g.addEventListener('keydown', function (e) {
+    var d = { Enter: 1, ' ': 1, ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key];
+    if (d) { e.preventDefault(); step(d); }
+  });
+  ui.lfoWave[i] = G;
+}
+function makeLfoTarget(i, x, y, w, h) {
+  var k = key(x, y, w, h, '', 'off', { fs: 9 * UL, onClick: function () { pickLfo = i; setPage('main'); } });
+  k.w = w; ui.lfoTarget[i] = k;
+}
+function syncLfo() {
+  (ui.lfoTarget || []).forEach(function (k, i) {
+    var t = lfoLive(i, true), name = t ? CONTROLS[t][0] : 'None', s = (i + 1) + ' · ' + name, fs = 9 * UL;
+    fs = Math.min(fs, Math.floor(fs * (k.w - 14 * UK) / textW(s, fs, 700, 0.08) * 10) / 10);
+    k.txt.textContent = s; k.txt.style.fontSize = fs + 'px';
+    k.set(t ? 'mod' : 'off');
+    k.b.setAttribute('aria-label', 'LFO ' + (i + 1) + ' target: ' + name + '. Pick a knob on the Main page');
+  });
+  drawLfoWaves();
+}
+var SH_DRAW = [0.55, -0.35, 0.9, -0.8, 0.15, -0.55];   // the S&H screen's picture of random steps
+function lfoShape(w, p) {
+  switch (w) {
+    case 0: return Math.sin(p * TAU);
+    case 1: return 1 - 4 * Math.abs(((p + 0.25) % 1) - 0.5);
+    case 2: return 2 * p - 1;
+    case 3: return p < 0.5 ? 1 : -1;
+    default: return SH_DRAW[Math.floor(p * SH_DRAW.length) % SH_DRAW.length];
+  }
+}
+// Each waveform screen: the LFO's number, its wave's name, one cycle of the wave (dimmer while the LFO drives nothing)
+// and a dot where the LFO is now.
+function drawLfoWaves() {
+  (ui.lfoWave || []).forEach(function (G, i) {
+    var c = G.x, w = G.w, h = G.h, wv = params['lfo' + i + 'Wave'], fs = Math.round(Math.min(h * 0.19, w * 0.15));
+    var x0 = w * 0.09, x1 = w * 0.91, y0 = h * 0.4, y1 = h * 0.88, mid = (y0 + y1) / 2, a = (y1 - y0) / 2;
+    c.clearRect(0, 0, w, h);
+    c.strokeStyle = 'rgba(143,141,146,0.3)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, mid); c.lineTo(x1, mid); c.stroke();
+    c.save(); c.globalAlpha = lfoLive(i) ? 1 : 0.5;
+    c.beginPath();
+    for (var k = 0; k <= 120; k++) { var p = Math.min(k / 120, 0.9999); c[k ? 'lineTo' : 'moveTo'](x0 + p * (x1 - x0), mid - a * lfoShape(wv, p)); }
+    c.strokeStyle = ICON_GREEN; c.lineWidth = Math.max(3, h * 0.022); c.lineJoin = 'round'; c.lineCap = 'round';
+    c.shadowColor = 'rgba(63,191,106,0.7)'; c.shadowBlur = 6; c.stroke();
+    var px = x0 + lfoPh[i] * (x1 - x0), py = mid - a * lfoOut(i);
+    c.shadowBlur = 0; c.strokeStyle = 'rgba(220,232,255,0.3)'; c.setLineDash([4, 6]);
+    c.beginPath(); c.moveTo(px, y0 - a * 0.15); c.lineTo(px, y1 + a * 0.1); c.stroke(); c.setLineDash([]);
+    c.shadowColor = P.accentGlow; c.shadowBlur = 8; c.fillStyle = P.accent;
+    c.beginPath(); c.arc(px, py, Math.max(5, h * 0.04), 0, TAU); c.fill();
+    c.restore();
+    c.font = '800 ' + fs + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
+    c.textAlign = 'left'; c.fillStyle = P.inkMute; c.fillText(String(i + 1), x0, h * 0.07 + fs);
+    c.textAlign = 'right'; c.fillStyle = P.accent; c.fillText(LFO_WAVES[wv].toUpperCase(), x1, h * 0.07 + fs);
+    G.g.setAttribute('aria-label', 'LFO ' + (i + 1) + ' waveform: ' + LFO_WAVES[wv] + '. Tap for the next');
+  });
+}
+
+// Picking an LFO's target (the Main page with pickLfo >= 0): every knob that can be a target gets an orange ring to
+// tap (the LFO's current target filled), and a bar across the foot of the screen names the LFO, with Clear (no target)
+// and Cancel. Tapping a knob, Clear, Cancel, Escape or the Advanced tab goes back to the Advanced page.
+function makePickRings() {
+  var cur = lfoLive(pickLfo, true);
+  Object.keys(ui.knobs || {}).forEach(function (id) {
+    if (!LFO_TARGETS[id]) return;
+    var K = ui.knobs[id], name = CONTROLS[id][0];
+    var d = el('div', at(K.x - K.R, K.y - K.R, 2 * K.R, 2 * K.R) + ';box-sizing:border-box;border-radius:50%;z-index:4;cursor:pointer;touch-action:manipulation;' +
+      'border:' + 3 * UK + 'px solid ' + P.mod + ';background:' + (id === cur ? 'rgba(255,154,60,0.38)' : 'rgba(255,154,60,0.07)') + ';box-shadow:0 0 ' + 12 * UK + 'px ' + P.modGlow + ',inset 0 0 ' + 8 * UK + 'px ' + P.modGlow);
+    d.className = 'pick'; d.setAttribute('role', 'button'); d.tabIndex = 0;
+    d.setAttribute('aria-label', 'Make ' + name + ' the target of LFO ' + (pickLfo + 1));
+    d.addEventListener('click', function () { pickTarget(id); });
+    d.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickTarget(id); } });
+    d.addEventListener('pointerenter', function () { showTip(d, name); });
+    d.addEventListener('pointerleave', hideTip);
+  });
+}
+function makePickBanner() {
+  var b = ui.bezel, h = 34 * UK, x = b[0] + 16, w = b[2] - 32, y = b[1] + b[3] - 16 - h, kw = 66 * UK, kh = h - 10 * UK, pad = 5 * UK;
+  var bar = el('div', at(x, y, w, h) + ';box-sizing:border-box;z-index:5;display:flex;align-items:center;padding-left:' + 12 * UK + 'px;border-radius:6px;' +
+    'background:rgba(12,12,15,0.82);box-shadow:0 0 0 2px ' + P.mod + ',0 0 14px ' + P.modGlow);
+  bar.setAttribute('role', 'status');
+  el('span', PRINT(9 * UL, P.mod), bar, 'LFO ' + (pickLfo + 1) + ' target · tap a knob');
+  [['Cancel', function () { setPage('adv'); }], ['Clear', function () { pickTarget(''); }]].forEach(function (d, j) {
+    var k = key(x + w - pad - (j + 1) * kw - j * pad, y + (h - kh) / 2, kw, kh, d[0], null, { fs: 8 * UL, aria: d[0] === 'Clear' ? 'No target for LFO ' + (pickLfo + 1) : 'Cancel picking', onClick: d[1] });
+    k.b.style.zIndex = '6';
+  });
+}
+function pickTarget(id) {
+  var i = pickLfo; if (i < 0) return;
+  params['lfo' + i + 'Target'] = id;
+  setPage('adv');
+  if (ui.lfoTarget && ui.lfoTarget[i]) flashTip(ui.lfoTarget[i].b, 'LFO ' + (i + 1) + ' → ' + (id ? CONTROLS[id][0] : 'none'));
+}
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pickLfo >= 0) setPage('adv'); });
+// On the Main page, an orange dot rides the scale of each knob an LFO drives, showing the value the frame is drawn
+// with (updated every frame by lfoUi).
+function syncModDots() {
+  Object.keys(ui.modDots || {}).forEach(function (id) { ui.modDots[id].remove(); });
+  ui.modDots = {};
+  for (var i = 0; i < LFO_N; i++) {
+    var id = lfoLive(i), K = id && ui.knobs && ui.knobs[id];
+    if (!K || ui.modDots[id]) continue;
+    var c = el('div', 'position:absolute;inset:0;pointer-events:none', K.ring), s = 10 * UK;
+    el('div', 'position:absolute;left:50%;top:1px;width:' + s + 'px;height:' + s + 'px;margin-left:' + (-s / 2) + 'px;border-radius:50%;background:' + P.mod + ';box-shadow:0 0 8px ' + P.modGlow, c);
+    ui.modDots[id] = c;
+  }
+  lfoUi();
+}
+function afterPanel() {
+  if (page !== 'main') return;
+  syncers.push(syncModDots); syncModDots();
+  if (pickLfo >= 0) { makePickRings(); makePickBanner(); }
+}
+// Per rendered frame: the waveform screens (Advanced page) or the modulation dots (Main page).
+function lfoUi() {
+  if (page === 'adv') { drawLfoWaves(); return; }
+  for (var id in ui.modDots || {}) {
+    var v = clamp(toV(PD[id], params[id]) + (lfoOff[id] || 0));
+    ui.modDots[id].style.transform = 'rotate(' + (-135 + v * 270) + 'deg)';
+  }
+}
+
+// LFO engine. Phases advance with the render clock (simTime), so Freeze holds them and the self-test hooks repeat;
+// S&H takes a new random level each time its cycle wraps. liveParams(t) gives the parameters a frame is drawn with:
+// params itself while no LFO drives anything, otherwise a copy (LIVE) with each target moved by its LFOs. The move is in
+// knob travel (0-1, through the knob's taper), Depth x 1/2 x the wave, so Depth 100% swings across the whole sweep;
+// stepped knobs (Blend Mode, Delay, Shape Sides) stay on their steps. The knobs keep showing where they are set.
+var lfoPh = [], lfoSH = [], lfoT = null, lfoOff = {}, LIVE = {};
+for (q = 0; q < LFO_N; q++) { lfoPh.push(0); lfoSH.push(0); }
+function lfoOut(i) { var w = params['lfo' + i + 'Wave']; return w === 4 ? lfoSH[i] : lfoShape(w, lfoPh[i]); }
+// The id of the knob LFO i drives ('' for none; any depth when anyDepth, else only while Depth is above 0).
+function lfoLive(i, anyDepth) {
+  var t = params['lfo' + i + 'Target'];
+  return t && LFO_TARGETS[t] && (anyDepth || params['lfo' + i + 'Depth'] > 0) ? t : '';
+}
+function modValue(d, x, off) {
+  var v = clamp(toV(d, x) + off);
+  x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp ? taper(d, v) : v) * (d.max - d.min);
+  if (steps(d)) x = Math.round(x / d.step) * d.step;
+  return clamp(x, d.min, d.max);
+}
+function liveParams(t) {
+  var i, id;
+  if (t !== lfoT) {
+    var dt = lfoT == null ? 0 : clamp(t - lfoT, 0, 0.25);
+    lfoT = t;
+    for (i = 0; i < LFO_N; i++) {
+      lfoPh[i] += dt * params['lfo' + i + 'Rate'];
+      if (lfoPh[i] >= 1) { lfoPh[i] %= 1; lfoSH[i] = Math.random() * 2 - 1; }
+    }
+  }
+  var off = {}, any = false;
+  for (i = 0; i < LFO_N; i++) {
+    id = lfoLive(i);
+    if (id) { off[id] = (off[id] || 0) + params['lfo' + i + 'Depth'] * 0.5 * lfoOut(i); any = true; }
+  }
+  lfoOff = off;
+  if (!any) return params;
+  Object.assign(LIVE, params);
+  for (id in off) LIVE[id] = modValue(PD[id], params[id], off[id]);
+  return LIVE;
 }
 function syncKeyOn() {
   (ui.onOff || []).forEach(function (k) {
@@ -1352,41 +1560,43 @@ window.addEventListener('beforeunload', function () { if (cam.stream) cam.stream
 // 7. Uniform upload + render loop
 // -------------------------------------------------------------
 var eqVals = new Float32Array(EQ_N);
-function uploadFeedbackUniforms(t) {
-  var u = feedbackUniforms, w = mixWeights(), key = hslToRgb(params.keyHue, params.keySat, params.keyLight);
+// p: the frame's parameters (liveParams: params with the LFOs applied).
+function uploadFeedbackUniforms(t, p) {
+  p = p || liveParams(t);
+  var u = feedbackUniforms, w = mixWeights(), key = hslToRgb(p.keyHue, p.keySat, p.keyLight);
   gl.uniform1i(u.u_prevFrame, 0);
   gl.uniform2f(u.u_resolution, CW, CH);
   gl.uniform1f(u.u_time, t);
-  gl.uniform1f(u.u_feedback, params.feedback);
-  gl.uniform1f(u.u_zoom, params.zoom);
-  gl.uniform1f(u.u_rotate, params.rotate);
-  gl.uniform2f(u.u_translate, params.translateX, params.translateY);
-  gl.uniform1f(u.u_hueDrift, params.hueDrift);
+  gl.uniform1f(u.u_feedback, p.feedback);
+  gl.uniform1f(u.u_zoom, p.zoom);
+  gl.uniform1f(u.u_rotate, p.rotate);
+  gl.uniform2f(u.u_translate, p.translateX, p.translateY);
+  gl.uniform1f(u.u_hueDrift, p.hueDrift);
   gl.uniform4f(u.u_mix, w[0], w[1], w[2], w[3]);
-  gl.uniform1f(u.u_frequency, FIXED.frequency / params.oscSize);
+  gl.uniform1f(u.u_frequency, FIXED.frequency / p.oscSize);
   gl.uniform1f(u.u_speed, FIXED.speed);
   gl.uniform1f(u.u_sync, FIXED.sync);
   gl.uniform1f(u.u_noiseSpeed, FIXED.noiseSpeed);
-  gl.uniform1f(u.u_shapeSides, params.shapeSides);
+  gl.uniform1f(u.u_shapeSides, p.shapeSides);
   gl.uniform1f(u.u_shapeSmoothing, FIXED.shapeSmoothing);
-  gl.uniform1f(u.u_noiseScale, params.noiseScale);
+  gl.uniform1f(u.u_noiseScale, p.noiseScale);
   gl.uniform1i(u.u_camera, 1);
   gl.uniform1f(u.u_cameraAspect, cam.aspect);
   gl.uniform1f(u.u_cameraOn, cam.stream && cameraVideo.readyState >= 2 ? 1 : 0);
   gl.uniform1f(u.u_cameraMirror, cam.facing === 'user' ? 1 : 0);
-  gl.uniform1f(u.u_hue, params.hue / 360);
-  gl.uniform1f(u.u_saturate, params.saturate);
-  gl.uniform1f(u.u_brightness, params.brightness);
-  gl.uniform1f(u.u_contrast, params.contrast);
-  for (var e = 0; e < EQ_N; e++) eqVals[e] = params['eq' + e];
+  gl.uniform1f(u.u_hue, p.hue / 360);
+  gl.uniform1f(u.u_saturate, p.saturate);
+  gl.uniform1f(u.u_brightness, p.brightness);
+  gl.uniform1f(u.u_contrast, p.contrast);
+  for (var e = 0; e < EQ_N; e++) eqVals[e] = p['eq' + e];
   gl.uniform1fv(u.u_satEq, eqVals);
   gl.uniform1f(u.u_eqOn, eqActive() ? 1 : 0);
-  gl.uniform1f(u.u_chromakeyEnabled, params.chromakeyEnabled ? 1 : 0);
+  gl.uniform1f(u.u_chromakeyEnabled, p.chromakeyEnabled ? 1 : 0);
   gl.uniform3f(u.u_chromakeyColor, key[0], key[1], key[2]);
-  gl.uniform1f(u.u_chromakeyThreshold, params.chromakeyThreshold);
-  gl.uniform1f(u.u_chromakeySoftness, params.chromakeySoftness);
-  gl.uniform1i(u.u_blendMode, params.blendMode);
-  gl.uniform1f(u.u_modulateAmount, params.modulateAmount);
+  gl.uniform1f(u.u_chromakeyThreshold, p.chromakeyThreshold);
+  gl.uniform1f(u.u_chromakeySoftness, p.chromakeySoftness);
+  gl.uniform1i(u.u_blendMode, p.blendMode);
+  gl.uniform1f(u.u_modulateAmount, p.modulateAmount);
 }
 
 var lastWritten = buffers[0];
@@ -1395,7 +1605,7 @@ function renderFeedbackPass(t) {
   // delay=0 reads the most recently completed frame (plain ping-pong);
   // higher delay reads further back. The ring always holds at least
   // delay+2 slots, so the read can never land on the slot being written.
-  var delay = Math.round(params.delay);
+  var p = liveParams(t), delay = Math.round(p.delay);
   ensureHistory(delay);
   var n = buffers.length, writeIndex = ringWriteIndex;
   var readIndex = wrapIndex(writeIndex - 1 - delay, n);
@@ -1407,7 +1617,7 @@ function renderFeedbackPass(t) {
   gl.bindTexture(gl.TEXTURE_2D, read.tex);
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, cameraTexture);
-  uploadFeedbackUniforms(t);
+  uploadFeedbackUniforms(t, p);
   drawFullscreenTriangle();
   lastWritten = write;
   ringWriteIndex = wrapIndex(ringWriteIndex + 1, n);
@@ -1447,6 +1657,7 @@ function frame(now) {
     updateCameraTexture();
     renderFeedbackPass(simTime);
     renderDisplayPass();
+    lfoUi();
   } else if (rec) renderDisplayPass();   // a recording keeps running through a freeze, holding the frozen image
   if (rec) rec.capture();
 }
@@ -1855,7 +2066,7 @@ fit();
 // feedback loop directly, then report.
 // Parameters can be overridden in the hash, e.g. #shot&feedback=0&mixX=1.
 if (location.hash.indexOf('#shot') === 0) {
-  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] in params) params[p[0]] = parseFloat(p[1]); });
+  location.hash.slice(1).split('&').slice(1).forEach(function (kv) { var p = kv.split('='); if (p[0] in params) params[p[0]] = typeof params[p[0]] === 'string' ? decodeURIComponent(p[1]) : parseFloat(p[1]); });
   syncUI();
   var n = 0;
   for (; n < 150; n++) { simTime += 1 / 60; renderFeedbackPass(simTime); }

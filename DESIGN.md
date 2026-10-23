@@ -861,19 +861,37 @@ both schemes and layouts, no console errors.
 
 ## 23. Advanced page (experimental, 2026-10-22)
 A **Main / Advanced** tab at the top right of the screen (the Lab key is top left) switches the panel between two
-pages with the same layout; the choice is kept (localStorage `vfv-page`). The Advanced page keeps every window where it
-is, in its family's colours, and swaps what is in it (`ADV_SECTIONS`, `pageSec`):
-- **Colors** (in Layers' place) is live: a hue EQ that scales saturation band by band around the spectrum. Twelve
-  bands 30° apart from red (`eq0`..`eq11`, 0–2×, 1 = unchanged; part of presets) are joined by a smooth periodic
-  Catmull-Rom curve, drawn over the spectrum on a glass screen with the spectrum strip under it greyed where the curve
-  dips. Drag across the screen to draw the curve, wheel over a band to nudge it, double-click a band to flatten it.
-  **Flat** resets every band; **Bypass** turns the EQ off and keeps the curve. In the shader (`hueEq`) the same curve
-  is sampled at each pixel's hue after Saturation, and the step is skipped when the EQ is flat or bypassed.
-- **LFO** (Waveform: Sine · Tri · Saw · Square · S&H, Rate, Depth, Phase), **Luma Key** (On/Off, Low Clip, High Clip,
-  Softness, Fill Hue, Fill Sat), **Kaleido** (Segments, Angle, Center X, Center Y, Spin) and **Clock** (Tempo,
-  Division, Swing, Steps) are placeholders: their knobs (`x_` params) turn, show values and are saved in presets, but
-  drive nothing yet.
-Ring legends (Blend Mode, Waveform) are now generic (`legend: [...]` in `CONTROLS`, `ringLegend`), and On/Off keys
-(Chromakey, Luma Key) share `makeOnOff`.
-Tested in headless Chrome at 900 x 1340 and 1340 x 910: switching both ways, every band at 0 turns the output grey
-(average chroma 241 → 0), Bypass restores colour, no GL or console errors.
+pages; the choice is kept (localStorage `vfv-page`). Since the second pass (below) the Advanced page has its own
+arrangement (`buildAdvanced`): **Colors** along the whole bottom, and in the right column the **LFO** window (green,
+the Chromakey family's colours) over the **Mix** window (purple, Transform's), which holds the XY pad. In landscape it
+is transposed like the rest of the panel: Colors runs the full height of the right edge, LFO and Mix share the band
+along the bottom.
+- **Colors** is a hue EQ that scales saturation band by band around the spectrum. Twelve bands 30° apart from red
+  (`eq0`..`eq11`, 0–2×, 1 = unchanged; part of presets) are joined by a smooth periodic Catmull-Rom curve, drawn over
+  the spectrum on a glass screen that fills the window, with the spectrum strip under it greyed where the curve dips.
+  Drag across the screen to draw the curve, wheel over a band to nudge it, double-click a band to flatten it,
+  double-click the spectrum strip to flatten every band. In a tall window (landscape) the screen is drawn turned a
+  quarter (hue downwards, level to the right). In the shader (`hueEq`) the same curve is sampled at each pixel's hue
+  after Saturation, and the step is skipped while the EQ is flat.
+- **LFO**: four oscillators at the top, their four target keys at the bottom (portrait: one oscillator per row, the
+  keys 2 x 2 under a Targets rule; landscape: one LFO per column, its key at the foot). Each LFO has a **waveform**
+  (`lfoNWave`: Sine, Tri, Saw, Square, S&H, picked on a small screen that shows the wave and where the LFO is in its
+  cycle; tap, wheel or arrow keys step it), **Speed** (`lfoNRate`, 0.02–20 Hz, log), **Depth** (`lfoNDepth`) and a
+  **target** (`lfoNTarget`, the id of a Main page knob or ''). All are part of presets.
+- **Picking a target**: tapping a target key switches to the Main page with `pickLfo` set. Every Main page knob gets an
+  orange ring (the LFO's current target is filled) and a bar across the foot of the screen names the LFO with Clear
+  (no target) and Cancel. Tapping a knob makes it the target and returns to Advanced; Clear, Cancel, Escape or the
+  Advanced tab return without one.
+- **Modulation** (`liveParams`): each rendered frame the LFO phases advance with the render clock (so Freeze holds
+  them), and the frame is drawn with a copy of the parameters in which every target is moved by Depth x 1/2 x the wave,
+  in knob travel through the knob's taper (Depth 100% swings across the whole sweep, clamped at the ends; stepped knobs
+  stay on their steps; LFOs sharing a target add up). The knobs keep showing where they are set; on the Main page an
+  orange dot rides the scale of each driven knob, showing the value in use.
+- **Mix**: the same XY layer mixer as in Layers on the Main page (`mixX`, `mixY`).
+
+First pass (same day, replaced): the Advanced page kept every Main window in place, with Colors (Flat and Bypass keys
+beside the EQ screen) in Layers' place and placeholder LFO, Luma Key, Kaleido and Clock modules whose knobs drove
+nothing. The placeholders' `x_` parameters and `eqBypass` are gone; presets that hold them recall the rest.
+Ring legends are generic (`legend: [...]` in `CONTROLS`, `ringLegend`), and On/Off keys share `makeOnOff`.
+Tested in headless Chrome in 450 x 668 and 1000 x 680 windows (portrait, landscape): picking, Clear, Cancel and Escape;
+LFO 1 on Zoom at Depth 100% swings the drawn zoom 0.81–1.2 around 1.012; no GL or console errors.
