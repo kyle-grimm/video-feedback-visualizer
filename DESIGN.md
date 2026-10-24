@@ -937,3 +937,32 @@ Rows, Columns and Grid sit each channel on a faint plate. The style keys and the
 (`frameKeys`, `pickStyle`). The old Targets rule (`lfoRule`) is gone.
 Tested in headless Chrome at 900 x 1340 and 1340 x 910: every style builds 4 wave screens, 8 knobs and 4 target keys,
 none overlapping and all inside the window; tapping a wave screen steps its waveform; no console errors.
+
+## 26. Colors EQ: eight OP-1-inspired styles (2026-10-24)
+Styles 5–12 take their look from the Teenage Engineering OP-1 (inspired by it, not a copy of any of its screens). They
+use black screens drawn in thin vector lines, flat light-grey keys and pads, and coloured endless encoders. An encoder's
+colour matches the value it turns on screen: **blue** steps the selected band, **green** turns its gain, **white** its
+hue and **orange** its width. Encoders turn by vertical drag (Shift for fine), the wheel or the arrow keys; double-click
+resets. Relative changes (encoders, keys, pads) stop once at 1× on the way through.
+5. **Encoders**: level bars, each band's bell drawn under its bar, and all four encoders.
+6. **Keys**: a flat grey key per band with its level lit up the key (drag along it; a tap only selects), a curve
+   screen, and the white and orange encoders.
+7. **Dots**: a dot matrix, 8 dots per band (0.25–2× in quarter steps; the colour square is 0×). Tap or sweep across
+   it to set levels. White and orange encoders.
+8. **Dials**: arc gauges. Drag one up or down for gain; the orange arc in its foot is the width. White and orange
+   encoders.
+9. **Bloom**: a flower whose petals are the bands (angle = hue, length = gain, fatness = width; drag a petal's tip),
+   with a value list beside it (tap a row to select) and all four encoders.
+10. **Levels**: lollipop levels joined by cables to markers on a hue tape, greyed where saturation is cut. Sweep the
+    levels for gain; slide a marker for hue. The wheel or the orange encoder sets width.
+11. **Pads**: a grey pad per band holding a disc in its colour. The disc grows with the gain (the printed ring is 1×)
+    and its glow shows the width. A tap steps 1 → 1.5 → 2 → 0 → 0.5×; drag for any level. A status screen sits above,
+    with the white and orange encoders.
+12. **Seven**: an encoder per band, capped in its colour, under a screen of readouts. The Gain / Hue / Width keys pick
+    what all seven turn.
+In a tall window (landscape) the bands run down the window. With more than six styles, `frameKeys` swaps the
+numbered keys for a stepper: a chip with the style's number and name, plus ◀ ▶ keys. Twelve numbered keys don't fit
+the landscape window. Tested in headless Chrome at 900 × 1340 and 1340 × 910: every style's controls stay inside the
+window without overlapping; each style's drag, tap, encoder and key interactions change the intended parameters; no
+console errors.
+
