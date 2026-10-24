@@ -895,3 +895,29 @@ nothing. The placeholders' `x_` parameters and `eqBypass` are gone; presets that
 Ring legends are generic (`legend: [...]` in `CONTROLS`, `ringLegend`), and On/Off keys share `makeOnOff`.
 Tested in headless Chrome in 450 x 668 and 1000 x 680 windows (portrait, landscape): picking, Clear, Cancel and Escape;
 LFO 1 on Zoom at Depth 100% swings the drawn zoom 0.81–1.2 around 1.012; no GL or console errors.
+
+## 24. Colors EQ: seven-band parametric, four styles; Modulation (2026-10-24)
+- The LFO window is titled **Modulation** (its four oscillators are still LFO 1–4).
+- **Colors EQ** replaces the 12-band hue curve with a seven-band parametric EQ on saturation. Each band has a gain
+  (`eqGn`, 0–2×, 1 = unchanged) on a vertical slider, a centre hue (`eqHn`; defaults red 0°, orange 30°, yellow 60°,
+  green 120°, cyan 180°, blue 240°, magenta 300°) and a width (`eqWn`, ±6–120°, default ±22°, the bell's standard
+  deviation). Saturation at a hue is multiplied by 1 + Σ (gain − 1) × bell, clamped at 0; `hueEq` in the shader applies
+  the same sum (bands as `u_eqBand`: gain, hue and width in turns), skipped while every gain is 1. All are in presets;
+  the old `eq0`..`eq11` are ignored on recall.
+- **Four styles** to choose from in the app: keys **1–4** on the window's top edge (inside it when they don't fit, as
+  in landscape) with the style's name beside them and **Flat** (every gain to 1). The choice is kept
+  (localStorage `vfv-eq-style`).
+  1. **Console**: per band a colour chip, a fader whose cap carries a stripe of the band's hue, and Hue (its scale ring
+     is the spectrum) and Width knobs under it.
+  2. **Spectrum**: one glass screen. Each band is a slider track standing on the spectrum at its hue, under the
+     response curve; drag a cap up or down for gain, sideways for hue; the wheel or the Width knob (for the band last
+     touched, named over the knob in its colour) sets the width, shown as a bracket.
+  3. **Rainbow**: Hue and Width knobs over faders whose wide tracks run from grey through the band's hue to full
+     colour, white caps, colour chips at the foot.
+  4. **Wheel**: thin faders with round caps in the band's hue beside a polar screen (hue around a spectrum ring, gain
+     outwards, the response as a closed curve); drag a band's dot around for hue and in or out for gain; Width knob as
+     in Spectrum, the selected band's width drawn as an arc inside the ring.
+  Faders snap to 1× at the centre line; double-click returns 1×; wheel and arrow keys nudge by 0.05.
+Tested in headless Chrome at 900 x 1340 and 1340 x 910: all four styles build in both layouts, a fader drag to the top
+gives 2×, double-click 1×; every gain 0 with wide bands turns the output grey (chroma 223 → 0); no GL or console
+errors.

@@ -273,9 +273,18 @@ for (var q = 0; q < LFO_N; q++) {
 }
 // Fixed generator settings that no longer have knobs.
 var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
-var EQ_N = 12, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Lime', 'Green', 'Spring', 'Cyan', 'Azure', 'Blue', 'Violet', 'Magenta', 'Rose'];
+// Colors EQ (Advanced page): seven bands, each a gain (eqGn, 0-2x saturation, 1 = unchanged), a centre hue (eqHn,
+// degrees) and a width (eqWn, degrees: the bell's standard deviation). eqWsel stands in for the selected band's width
+// on the single Width knob of the Spectrum and Wheel styles. eqStyle (localStorage 'vfv-eq-style') picks how the
+// window looks: see buildColorsEq.
+var EQ_N = 7, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta'], EQ_HUES = [0, 30, 60, 120, 180, 240, 300];
+var EQ_STYLES = ['Console', 'Spectrum', 'Rainbow', 'Wheel'], eqStyle = 0, eqSel = 0;
+try { eqStyle = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vfv-eq-style'), 10) || 0)); } catch (e) { /* Console */ }
+var EQ_WIDTH = { min: 6, max: 120, def: 22, zero: 22, log: true, step: 0.5, f: function (v) { return '±' + Math.round(v) + '°'; } };
+for (q = 0; q < EQ_N; q++) { PD['eqH' + q] = { min: 0, max: 360, def: EQ_HUES[q], zero: EQ_HUES[q], step: 1, f: deg }; PD['eqW' + q] = EQ_WIDTH; }
+PD.eqWsel = EQ_WIDTH;
 var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
-for (q = 0; q < EQ_N; q++) DEFAULTS['eq' + q] = 1;
+for (q = 0; q < EQ_N; q++) DEFAULTS['eqG' + q] = 1;
 for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
@@ -736,90 +745,282 @@ function buildAdvanced(eq, lfo, mix, m) {
   makePad(mix[0] + (mix[2] - s) / 2, mix[1] + tab + m + (mix[3] - tab - 2 * m - s) / 2, s);
 }
 
-// Colors (Advanced page): a hue EQ that scales saturation band by band around the spectrum. Twelve bands 30 degrees
-// apart from red (eq0..eq11, 0-2x, 1 = unchanged) are joined by a smooth periodic curve (Catmull-Rom; the shader
-// samples the same curve at each pixel's hue), drawn over the spectrum on a glass screen that fills the window. Drag
-// across the screen to draw the curve (each pointer position sets the band under it), use the wheel over a band to
-// nudge it, double-click a band to flatten it, and double-click the spectrum strip to flatten every band. In a tall
-// window (landscape) the screen is drawn turned a quarter: hue runs downwards and saturation to the right.
+// Colors EQ (Advanced page): a seven-band parametric EQ on saturation around the hue spectrum. Each band has a gain on a
+// vertical slider (0-2x, 1 = unchanged), a centre hue and a width. The saturation multiplier at a hue is 1 plus every
+// band's (gain - 1) times its bell (a Gaussian of the hue distance over the width), clamped at 0; the shader (hueEq)
+// applies the same sum at each pixel's hue after Saturation, skipped while every gain is 1. Keys on the window's top
+// edge (inside it when they don't fit) pick one of four styles and Flat (every gain back to 1):
+// 1 Console: per band a colour chip, a fader whose cap carries the band's hue, and Hue (its scale is the spectrum) and
+//   Width knobs.
+// 2 Spectrum: one glass screen; each band is a slider track standing on the spectrum at its hue under the response
+//   curve. Drag a cap up or down for gain, sideways to move its hue; the wheel, or the Width knob (for the band last
+//   touched), sets its width.
+// 3 Rainbow: Hue and Width knobs over faders whose wide tracks run from grey through the band's hue to full colour.
+// 4 Wheel: a polar screen (hue around the ring, gain outwards) beside thin faders. Drag a band's dot around for hue
+//   and in or out for gain; the Width knob sets the band last touched.
+// Every fader snaps to 1x at its centre line, double-click returns 1x, and the wheel and arrow keys nudge it.
+function eqHueCss(i, l, sat) { return 'hsl(' + Math.round(params['eqH' + i]) + ',' + (sat == null ? 90 : sat) + '%,' + (l == null ? 56 : l) + '%)'; }
+function eqHd(a, b) { return Math.abs((((a - b) % 360) + 540) % 360 - 180); }
 function eqAt(h) {
-  var p = (((h % 1) + 1) % 1) * EQ_N, i = Math.floor(p), t = p - i;
-  var v = function (j) { return params['eq' + (((j % EQ_N) + EQ_N) % EQ_N)]; }, a = v(i - 1), b = v(i), c = v(i + 1), d = v(i + 2);
-  return Math.max(0, b + 0.5 * t * (c - a + t * (2 * a - 5 * b + 4 * c - d + t * (3 * (b - c) + d - a))));
+  var k = 1;
+  for (var i = 0; i < EQ_N; i++) { var d = eqHd(h, params['eqH' + i]) / params['eqW' + i]; k += (params['eqG' + i] - 1) * Math.exp(-0.5 * d * d); }
+  return Math.max(0, k);
 }
-function eqActive() { for (var i = 0; i < EQ_N; i++) if (params['eq' + i] !== 1) return true; return false; }
+function eqActive() { for (var i = 0; i < EQ_N; i++) if (params['eqG' + i] !== 1) return true; return false; }
+function eqRefresh() { (ui.eqParts || []).forEach(function (f) { f(); }); }
+function eqSelect(i) { eqSel = i; params.eqWsel = params['eqW' + i]; if (ui.eqWknob) ui.eqWknob.sync(); eqRefresh(); }
+function eqSetGain(i, g) { g = clamp(g, 0, 2); if (Math.abs(g - 1) < 0.05) g = 1; params['eqG' + i] = Math.round(g * 100) / 100; }
+function eqTip(target, i) { showTip(target, EQ_NAMES[i] + '  ' + params['eqG' + i].toFixed(2) + '×  ' + Math.round(params['eqH' + i]) + '°  ±' + Math.round(params['eqW' + i]) + '°'); }
 function buildColorsEq(b, m) {
-  secBox(b, 'Colors', 'layers');
-  var T = b[3] > b[2], gy = b[1] + 9 * UL + m;
-  ui.eq = glass(b[0] + m, gy, b[2] - 2 * m, b[1] + b[3] - m - gy, 'Hue EQ: drag across to set the saturation of each hue band; double-click the spectrum strip to flatten them all');
-  ui.eqT = T;
-  var g = ui.eq.g;
-  // Band under the pointer and its height on the plot (vy: 0 at the top of the screen, 1 at the bottom, as unturned).
-  var band = function (e) {
-    var r = g.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-    return { i: Math.max(0, Math.min(EQ_N - 1, Math.floor((T ? fy : fx) * EQ_N))), vy: T ? 1 - fx : fy };
-  };
-  var tipFor = function (i) { showTip(g, EQ_NAMES[i] + '  ' + params['eq' + i].toFixed(2) + '×'); };
+  secBox(b, 'Colors EQ', 'layers');
+  ui.eqParts = []; ui.eqKeys = [];
+  var kh = 22 * UK, f = 9 * UL, gap = 4 * UK, labels = ['1', '2', '3', '4', 'Flat'], name = EQ_STYLES[eqStyle];
+  var ws = labels.map(function (t) { return Math.max(kh * 1.2, textW(t, f, 700, 0.08) + 16 * UL); });
+  var nw = textW(name, f, 800, 0.12) + 14 * UL;
+  var total = nw + 6 * UK + ws.reduce(function (a, v) { return a + v; }, 0) + gap * 4 + 8 * UK;
+  var plate = (UL > 1 ? 8 : 12) + textW('Colors EQ', 10 * UL, 800, UL > 1 ? 0.1 : 0.16) + 16 + 12;
+  var onEdge = plate + total + 12 <= b[2];
+  var ky = onEdge ? b[1] - kh / 2 : b[1] + 9 * UL + 6, x = b[0] + b[2] - (onEdge ? 10 : m) - total;
+  // The style's name, on a dark chip.
+  el('span', at(x, ky, nw, kh) + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:3px;background:#141316;' +
+    PRINT(f, P.accent) + ';z-index:2', panel, name);
+  x += nw + 6 * UK;
+  labels.forEach(function (t, i) {
+    if (i === 4) x += 8 * UK;
+    var st = i < 4, k = key(x, ky, ws[i], kh, t, null, { fs: f, aria: st ? 'EQ style ' + t + ': ' + EQ_STYLES[i] : 'Flatten the EQ (every gain to 1x)', onClick: st ? function () {
+      if (eqStyle !== i) { eqStyle = i; try { localStorage.setItem('vfv-eq-style', String(i)); } catch (e) { /* not kept */ } build(); scaleStage(); }
+      if (ui.eqKeys[i]) flashTip(ui.eqKeys[i].b, 'Style ' + t + ': ' + EQ_STYLES[i]);
+    } : function () { for (var j = 0; j < EQ_N; j++) params['eqG' + j] = 1; eqRefresh(); flashTip(k.b, 'EQ flat'); } });
+    k.b.style.zIndex = '2';
+    if (st) {
+      var on = i === eqStyle;
+      k.b.setAttribute('aria-pressed', on ? 'true' : 'false'); k.txt.style.color = on ? P.accent : P.inkMute; k.txt.style.textShadow = on ? '0 0 6px ' + P.accentGlow : 'none';
+      ui.eqKeys.push(k);
+    }
+    x += ws[i] + gap;
+  });
+  var top = onEdge ? b[1] + 9 * UL + m * 0.6 : ky + kh + m * 0.6;
+  var C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top];
+  [function () { eqStrips(C, 'console'); }, function () { eqSpectrum(C); }, function () { eqStrips(C, 'rainbow'); }, function () { eqWheel(C); }][eqStyle]();
+  syncers.push(eqRefresh);
+  eqRefresh();
+}
+// A vertical gain fader for band i in [x, y, w, h]. look: 'console' (dark slot, a cap with a stripe in the band's
+// hue), 'rainbow' (a wide track from grey through the band's hue to full colour, a white cap) or 'thin' (a narrow slot,
+// a round cap in the band's hue). Ticks mark 0, 0.5, 1 (the centre line, longer), 1.5 and 2x.
+function eqFader(x, y, w, h, i, look) {
+  var t = el('div', at(x, y, w, h) + ';touch-action:none;cursor:ns-resize');
+  t.setAttribute('role', 'slider'); t.tabIndex = 0; t.setAttribute('aria-label', EQ_NAMES[i] + ' saturation');
+  var capH = look === 'thin' ? Math.min(w * 0.7, 18 * UK) : look === 'rainbow' ? Math.max(8, 10 * UK) : Math.max(12, Math.min(24 * UK, h * 0.14));
+  var sw = look === 'rainbow' ? Math.min(w * 0.5, 26 * UK) : Math.max(4, (look === 'thin' ? 5 : 7) * UK), travel = h - capH;
+  [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+    var c = v === 0.5, inset = c ? 4 : 22;
+    el('div', 'position:absolute;left:' + inset + '%;right:' + inset + '%;height:' + (c ? 2 : 1) + 'px;top:' + (capH / 2 + (1 - v) * travel) + 'px;pointer-events:none;background:' +
+      (c ? 'rgba(220,232,255,0.45)' : 'rgba(143,141,146,0.4)'), t);
+  });
+  var slot = el('div', 'position:absolute;left:50%;top:' + capH / 2 + 'px;bottom:' + capH / 2 + 'px;width:' + sw + 'px;margin-left:' + -sw / 2 + 'px;border-radius:' + sw / 2 + 'px;' +
+    'background:#050406;box-shadow:inset 0 1px 3px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.07);pointer-events:none', t);
+  var cw = look === 'thin' ? capH : look === 'rainbow' ? sw + 10 * UK : Math.min(w * 0.82, 48 * UK);
+  var cap = el('div', 'position:absolute;left:50%;width:' + cw + 'px;margin-left:' + -cw / 2 + 'px;height:' + capH + 'px;pointer-events:none;box-sizing:border-box;' +
+    (look === 'thin' ? 'border-radius:50%;border:2px solid #0b0b0c' : look === 'rainbow' ? 'border-radius:3px;background:linear-gradient(#f4f4f6,#b9b8bd);box-shadow:0 0 0 1px #0b0b0c,0 2px 4px rgba(0,0,0,0.6)'
+      : 'border-radius:3px;background:linear-gradient(#5d5b61,#2b2a2e);box-shadow:0 0 0 1px #0b0b0c,0 3px 6px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.15)'), t);
+  var stripe = look === 'console' ? el('div', 'position:absolute;left:12%;right:12%;top:50%;height:' + Math.max(2, 3 * UK) + 'px;margin-top:' + -Math.max(1, 1.5 * UK) + 'px;border-radius:1px', cap) : null;
+  ui.eqParts.push(function () {
+    var g = params['eqG' + i], c = eqHueCss(i);
+    cap.style.top = (1 - g / 2) * travel + 'px';
+    if (stripe) { stripe.style.background = c; stripe.style.boxShadow = '0 0 5px ' + c; }
+    if (look === 'thin') { cap.style.background = c; cap.style.boxShadow = '0 0 8px ' + eqHueCss(i, 50) + (i === eqSel ? ',0 0 0 2px #fff' : ''); }
+    if (look === 'rainbow') slot.style.background = 'linear-gradient(to top,hsl(' + Math.round(params['eqH' + i]) + ',0%,42%),' + c + ' 50%,' + eqHueCss(i, 62, 100) + ')';
+    t.setAttribute('aria-valuetext', g.toFixed(2) + '×');
+  });
   var setFrom = function (e) {
-    var q = band(e), L = eqLayout(1), v = clamp((L.bot - q.vy) / (L.bot - L.top) * 2, 0, 2);
-    if (Math.abs(v - 1) < 0.04) v = 1;
-    params['eq' + q.i] = Math.round(v * 100) / 100; drawEq(); tipFor(q.i);
+    var r = t.getBoundingClientRect(), k = r.height / h;
+    eqSetGain(i, (1 - ((e.clientY - r.top) / k - capH / 2) / travel) * 2);
+    eqRefresh(); eqTip(t, i);
   };
-  g.style.cursor = 'crosshair'; g.style.touchAction = 'none'; g.setAttribute('role', 'group');
+  t.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    e.preventDefault(); t.setPointerCapture(e.pointerId); dragging = true;
+    if (eqSel !== i) eqSelect(i);
+    setFrom(e);
+    var up = function () { dragging = false; hideTip(); t.removeEventListener('pointermove', setFrom); t.removeEventListener('pointerup', up); t.removeEventListener('pointercancel', up); };
+    t.addEventListener('pointermove', setFrom); t.addEventListener('pointerup', up); t.addEventListener('pointercancel', up);
+  });
+  var nudge = function (d) { eqSetGain(i, params['eqG' + i] + d); eqRefresh(); eqTip(t, i); };
+  t.addEventListener('dblclick', function () { params['eqG' + i] = 1; eqRefresh(); eqTip(t, i); });
+  t.addEventListener('wheel', function (e) { e.preventDefault(); nudge(e.deltaY > 0 ? -0.05 : 0.05); }, { passive: false });
+  t.addEventListener('keydown', function (e) {
+    var d = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05 }[e.key];
+    if (d) { e.preventDefault(); nudge(d); }
+  });
+  t.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
+}
+// A band's Hue knob (its scale ring is the spectrum, so the pointer shows the hue) or Width knob, label hidden (the
+// tooltip names it).
+function eqKnob(cx, cy, ks, i, what) {
+  var id = (what === 'hue' ? 'eqH' : 'eqW') + i;
+  var k = knob(cx, cy, ks, EQ_NAMES[i] + (what === 'hue' ? ' hue' : ' width'), id, { after: eqRefresh, ticks: what === 'hue' ? 13 : 11 });
+  var ring = ui.knobs[id].ring;
+  ring.parentNode.lastChild.style.display = 'none';
+  if (what === 'hue') {
+    var stops = []; for (var j = 0; j <= 12; j++) stops.push('hsl(' + j * 30 + ',90%,56%) ' + j * 22.5 + 'deg');
+    ring.querySelector('.knob-scale').style.background = 'conic-gradient(from -135deg,' + stops.join(',') + ',transparent 270deg)';
+  }
+  return k;
+}
+// The single Width knob (Spectrum, Wheel) for the selected band, named over it in the band's colour.
+function eqWidthKnob(cx, cy, ks) {
+  syncers.push(function () { params.eqWsel = params['eqW' + eqSel]; });   // before the knob's own sync
+  params.eqWsel = params['eqW' + eqSel];
+  ui.eqWknob = knob(cx, cy, ks, 'Width', 'eqWsel', { after: function (v) { params['eqW' + eqSel] = v; eqRefresh(); } });
+  var chip = el('span', at(cx - 50 * UL, cy - ks / 2 - 12 - 13 * UL, 100 * UL, 12 * UL) + ';text-align:center;' + PRINT(9 * UL));
+  ui.eqParts.push(function () { chip.textContent = EQ_NAMES[eqSel]; chip.style.color = eqHueCss(eqSel, 64); });
+}
+// A colour chip with the band's initial.
+function eqChip(x, y, w, h, i) {
+  var c = el('span', at(x, y, w, h) + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;border-radius:3px;' + PRINT(Math.min(h * 0.75, 9 * UL), '#141316') + ';box-shadow:0 0 0 1px #0b0b0c', panel, EQ_NAMES[i][0]);
+  ui.eqParts.push(function () { c.style.background = eqHueCss(i); c.style.boxShadow = '0 0 0 1px #0b0b0c' + (i === eqSel ? ',0 0 0 ' + Math.max(1.5, UK * 1.5) + 'px #fff' : '') + ',0 0 8px ' + eqHueCss(i, 45); });
+  c.style.cursor = 'pointer'; c.setAttribute('role', 'button'); c.setAttribute('aria-label', EQ_NAMES[i] + ' band');
+  c.addEventListener('click', function () { eqSelect(i); });
+}
+// Styles 1 (look 'console') and 3 ('rainbow'): one strip per band.
+function eqStrips(C, look) {
+  var sw = C[2] / EQ_N, gap = 6 * UK, chip = 13 * UK, row = sw >= 90 * UK;
+  // Knobs side by side in a row when the strips are wide, stacked when narrow (landscape).
+  var ks = row ? Math.min(34 * UK, (sw - gap) / 2 - 20) : Math.max(14, Math.min(30 * UK, sw - 22)), R = ks / 2 + 10, kb = row ? 2 * R : 4 * R + gap;
+  for (var i = 0; i < EQ_N; i++) {
+    var cx = C[0] + sw * (i + 0.5), fw = Math.min(sw - 8, 64 * UK), y0, y1, kTop;
+    if (look === 'console') { y0 = C[1] + chip + gap; y1 = C[1] + C[3] - kb - gap; kTop = y1 + gap; eqChip(cx - Math.min(sw - 10, 40 * UK) / 2, C[1], Math.min(sw - 10, 40 * UK), chip, i); }
+    else { kTop = C[1]; y0 = C[1] + kb + gap; y1 = C[1] + C[3] - chip - gap; eqChip(cx - Math.min(sw - 10, 40 * UK) / 2, y1 + gap, Math.min(sw - 10, 40 * UK), chip, i); }
+    eqFader(cx - fw / 2, y0, fw, y1 - y0, i, look);
+    if (row) { eqKnob(cx - R - gap / 2, kTop + R, ks, i, 'hue'); eqKnob(cx + R + gap / 2, kTop + R, ks, i, 'width'); }
+    else { eqKnob(cx, kTop + R, ks, i, 'hue'); eqKnob(cx, kTop + 3 * R + gap, ks, i, 'width'); }
+  }
+}
+// Style 2: the spectrum screen, the Width knob beside it (wide window) or under it (tall).
+var EQ_H0 = -20;   // hue at the screen's left edge, so red's bell isn't split
+function eqSpectrum(C) {
+  var wide = C[2] >= C[3], ks = 44 * UK, R = ks / 2 + 10, lab = 10 * UL, G;
+  if (wide) { var col = 2 * R + 40 * UK; G = [C[0], C[1], C[2] - col - 8, C[3]]; eqWidthKnob(C[0] + C[2] - col / 2, C[1] + C[3] / 2, ks); }
+  else { var rw = 2 * R + lab + 30 * UK; G = [C[0], C[1], C[2], C[3] - rw - 8]; eqWidthKnob(C[0] + C[2] / 2, C[1] + C[3] - R - lab - 6, ks); }
+  var E = ui.eqSpec = glass(G[0], G[1], G[2], G[3], 'Colors EQ: drag a slider cap up or down for saturation, sideways for its hue; the wheel sets its width');
+  var g = E.g, w = E.w, h = E.h, top = 0.07 * h, bot = 0.82 * h;
+  var xOf = function (hu) { return ((((hu - EQ_H0) % 360) + 360) % 360) / 360 * w; }, yOf = function (v) { return bot - v / 2 * (bot - top); };
+  var capW = Math.max(26, Math.min(48, w / 13)), capH = capW * 0.55;
+  ui.eqParts.push(function () {
+    var c = E.x; c.clearRect(0, 0, w, h);
+    var spec = c.createLinearGradient(0, 0, w, 0);
+    for (var s0 = 0; s0 <= 24; s0++) spec.addColorStop(s0 / 24, 'hsl(' + Math.round((EQ_H0 + s0 * 15 + 360) % 360) + ',85%,55%)');
+    c.lineWidth = 2;
+    [0.5, 1, 1.5].forEach(function (v) { c.strokeStyle = v === 1 ? 'rgba(220,232,255,0.35)' : 'rgba(143,141,146,0.25)'; c.setLineDash(v === 1 ? [] : [6, 8]); c.beginPath(); c.moveTo(0, yOf(v)); c.lineTo(w, yOf(v)); c.stroke(); });
+    c.setLineDash([]);
+    var hueX = function (x) { return EQ_H0 + x / w * 360; };
+    c.beginPath(); c.moveTo(0, bot);
+    for (var x = 0; x <= w; x += 4) c.lineTo(x, yOf(Math.min(2, eqAt(hueX(x)))));
+    c.lineTo(w, bot); c.closePath(); c.save(); c.globalAlpha = 0.25; c.fillStyle = spec; c.fill(); c.restore();
+    c.beginPath(); for (x = 0; x <= w; x += 4) c[x ? 'lineTo' : 'moveTo'](x, yOf(Math.min(2, eqAt(hueX(x)))));
+    c.strokeStyle = P.accent; c.lineWidth = 4; c.shadowColor = P.accentGlow; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
+    for (var i = 0; i < EQ_N; i++) {   // slider tracks standing on the spectrum, their caps at the gain
+      var bx = xOf(params['eqH' + i]), by = yOf(params['eqG' + i]), col = eqHueCss(i), sel = i === eqSel;
+      c.globalAlpha = sel ? 0.55 : 0.28; c.fillStyle = col; c.fillRect(bx - 3, top - capH / 2, 6, bot - top + capH / 2); c.globalAlpha = 1;
+      if (sel) {   // the width, as a bracket at the cap's height
+        var wx = params['eqW' + i] / 360 * w; c.strokeStyle = col; c.lineWidth = 3;
+        c.beginPath(); c.moveTo(bx - wx, by - 10); c.lineTo(bx - wx, by); c.lineTo(bx + wx, by); c.lineTo(bx + wx, by - 10); c.stroke();
+      }
+      c.fillStyle = col; c.strokeStyle = sel ? '#fff' : '#0b0b0c'; c.lineWidth = sel ? 4 : 3;
+      c.beginPath(); c.roundRect ? c.roundRect(bx - capW / 2, by - capH / 2, capW, capH, 6) : c.rect(bx - capW / 2, by - capH / 2, capW, capH); c.fill(); c.stroke();
+      c.fillStyle = '#141316'; c.fillRect(bx - capW * 0.32, by - 1.5, capW * 0.64, 3);
+    }
+    c.fillStyle = spec; c.fillRect(0, 0.87 * h, w, 0.1 * h);
+    for (x = 0; x < w; x += 4) { var k = Math.min(1, eqAt(hueX(x))); if (k < 1) { c.fillStyle = 'rgba(128,128,128,' + (1 - k) + ')'; c.fillRect(x, 0.87 * h, 4, 0.1 * h); } }
+    g.setAttribute('aria-valuetext', EQ_NAMES.map(function (n, j) { return n + ' ' + params['eqG' + j].toFixed(2) + 'x at ' + Math.round(params['eqH' + j]) + '°'; }).join(', '));
+  });
+  var at0 = function (e) { var r = g.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * w, (e.clientY - r.top) / r.height * h]; };
+  var nearest = function (p) {
+    var best = 0, bd = 1e9;
+    for (var i = 0; i < EQ_N; i++) { var d = Math.abs(p[0] - xOf(params['eqH' + i])); d = Math.min(d, w - d); if (d < bd) { bd = d; best = i; } }
+    return best;
+  };
+  eqDrag(g, at0, nearest, function (i, p, p0, h0, moved) {
+    eqSetGain(i, (bot - p[1]) / (bot - top) * 2);
+    if (moved) params['eqH' + i] = Math.round((((h0 + (p[0] - p0[0]) / w * 360) % 360) + 360) % 360);
+  });
+}
+// Dragging on an EQ screen: pick the nearest band on pointer down, then move(i, point, start point, start hue, moved)
+// on every move (moved: the pointer has gone far enough sideways / around to shift the hue, not just the gain).
+// Double-click returns the nearest band to 1x; the wheel widens or narrows it.
+function eqDrag(g, pos, nearest, move) {
+  g.style.cursor = 'grab'; g.style.touchAction = 'none'; g.setAttribute('role', 'group');
   g.addEventListener('pointerdown', function (e) {
     if (e.button !== 0) return;
-    e.preventDefault(); g.setPointerCapture(e.pointerId); dragging = true; setFrom(e);
-    var up = function () { dragging = false; hideTip(); g.removeEventListener('pointermove', setFrom); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); };
-    g.addEventListener('pointermove', setFrom); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+    e.preventDefault(); g.setPointerCapture(e.pointerId); dragging = true;
+    var p0 = pos(e), i = nearest(p0, true), h0 = params['eqH' + i], moved = false;
+    eqSelect(i); eqTip(g, i);
+    var mv = function (ev) { var p = pos(ev); if (!moved && Math.hypot(p[0] - p0[0], p[1] - p0[1]) > 14) moved = true; if (moved) { move(i, p, p0, h0, true); eqRefresh(); eqTip(g, i); } };
+    var up = function () { dragging = false; hideTip(); g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up); };
+    g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
   });
-  g.addEventListener('dblclick', function (e) {
-    var q = band(e);
-    if (q.vy > eqLayout(1).strip - 0.03) { for (var i = 0; i < EQ_N; i++) params['eq' + i] = 1; drawEq(); flashTip(g, 'EQ flat'); }
-    else { params['eq' + q.i] = 1; drawEq(); tipFor(q.i); }
-  });
+  g.addEventListener('dblclick', function (e) { var i = nearest(pos(e)); params['eqG' + i] = 1; eqSelect(i); eqTip(g, i); });
   g.addEventListener('wheel', function (e) {
-    e.preventDefault(); var q = band(e), k = 'eq' + q.i;
-    params[k] = clamp(Math.round((params[k] + (e.deltaY > 0 ? -0.05 : 0.05)) * 100) / 100, 0, 2); drawEq(); tipFor(q.i);
+    e.preventDefault(); var i = nearest(pos(e)), k = 'eqW' + i;
+    params[k] = clamp(Math.round(params[k] * (e.deltaY > 0 ? 0.9 : 1.1) * 2) / 2, EQ_WIDTH.min, EQ_WIDTH.max); eqSelect(i); eqTip(g, i);
   }, { passive: false });
   g.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
-  syncers.push(drawEq);
-  drawEq();
 }
-// Plot area of the EQ screen as fractions of its height (h = 1) or in pixels: top and bottom of the 0-2x range, and the
-// spectrum strip under it. Heights are along the unturned screen (across a turned one).
-function eqLayout(h) { return { top: 0.09 * h, bot: 0.8 * h, strip: 0.86 * h, stripH: 0.1 * h }; }
-function drawEq() {
-  var E = ui.eq; if (!E) return;
-  var c = E.x, w = ui.eqT ? E.h : E.w, h = ui.eqT ? E.w : E.h, L = eqLayout(h), yOf = function (v) { return L.bot - v / 2 * (L.bot - L.top); };
-  var hueAt = function (x) { return x / w - 0.5 / EQ_N; };   // band i is centred on its column
-  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, E.w, E.h);
-  if (ui.eqT) c.setTransform(0, 1, -1, 0, E.w, 0);   // turned: x (hue) runs down the screen, y (level) right to left
-  var spec = c.createLinearGradient(0, 0, w, 0);
-  for (var s = 0; s <= 24; s++) spec.addColorStop(s / 24, 'hsl(' + Math.round(((hueAt(s / 24 * w) % 1) + 1) % 1 * 360) + ',85%,55%)');
-  // Grid: 0.5x / 1x / 1.5x lines, band dividers.
-  c.lineWidth = 2;
-  [0.5, 1, 1.5].forEach(function (v) { c.strokeStyle = v === 1 ? 'rgba(220,232,255,0.35)' : 'rgba(143,141,146,0.25)'; c.setLineDash(v === 1 ? [] : [6, 8]); c.beginPath(); c.moveTo(0, yOf(v)); c.lineTo(w, yOf(v)); c.stroke(); });
-  c.setLineDash([]); c.strokeStyle = 'rgba(143,141,146,0.12)';
-  for (var d = 1; d < EQ_N; d++) { c.beginPath(); c.moveTo(d / EQ_N * w, L.top); c.lineTo(d / EQ_N * w, L.bot); c.stroke(); }
-  // The curve, filled with the spectrum it acts on.
-  c.beginPath(); c.moveTo(0, L.bot);
-  for (var x = 0; x <= w; x += 4) c.lineTo(x, yOf(Math.min(2, eqAt(hueAt(x)))));
-  c.lineTo(w, L.bot); c.closePath();
-  c.save(); c.globalAlpha = 0.28; c.fillStyle = spec; c.fill(); c.restore();
-  c.beginPath();
-  for (x = 0; x <= w; x += 4) c[x ? 'lineTo' : 'moveTo'](x, yOf(Math.min(2, eqAt(hueAt(x)))));
-  c.strokeStyle = P.accent; c.lineWidth = 4; c.shadowColor = P.accentGlow; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
-  // Band handles in their own hue.
-  for (var i = 0; i < EQ_N; i++) {
-    var hx = (i + 0.5) / EQ_N * w, hy = yOf(params['eq' + i]);
-    c.beginPath(); c.arc(hx, hy, Math.max(7, Math.min(13, w / EQ_N * 0.22)), 0, TAU);
-    c.fillStyle = 'hsl(' + i * 360 / EQ_N + ',90%,58%)'; c.fill(); c.strokeStyle = '#0b0b0c'; c.lineWidth = 3; c.stroke();
+// Style 4: the polar screen and thin faders (with chips) and the Width knob; screen on the right in a wide window, on
+// top in a tall one.
+function eqWheel(C) {
+  var wide = C[2] >= C[3], ks = 40 * UK, R = ks / 2 + 10, lab = 10 * UL, gap = 8 * UK, chip = 13 * UK, s, G, F, kx, ky;
+  if (wide) {
+    s = C[3]; G = [C[0] + C[2] - s, C[1], s, s];
+    var col = 2 * R + 40 * UK; F = [C[0], C[1], C[2] - s - col - 2 * gap, C[3]]; kx = F[0] + F[2] + gap + col / 2; ky = C[1] + C[3] / 2;
+  } else {
+    s = C[2]; G = [C[0], C[1], s, s];
+    var rw = 2 * R + lab + 30 * UK; F = [C[0], C[1] + s + gap, C[2], C[3] - s - gap - rw]; kx = C[0] + C[2] / 2; ky = C[1] + C[3] - R - lab - 6;
   }
-  // Spectrum strip, desaturated by the curve above it.
-  c.fillStyle = spec; c.fillRect(0, L.strip, w, L.stripH);
-  for (x = 0; x < w; x += 4) { var k = Math.min(1, eqAt(hueAt(x))); if (k < 1) { c.fillStyle = 'rgba(128,128,128,' + (1 - k) + ')'; c.fillRect(x, L.strip, 4, L.stripH); } }
-  c.setTransform(1, 0, 0, 1, 0, 0);
-  E.g.setAttribute('aria-valuetext', EQ_NAMES.map(function (n, j) { return n + ' ' + params['eq' + j].toFixed(2); }).join(', '));
+  var fsw = F[2] / EQ_N;
+  for (var i = 0; i < EQ_N; i++) {
+    var cx = F[0] + fsw * (i + 0.5), fw = Math.min(fsw - 4, 40 * UK);
+    eqFader(cx - fw / 2, F[1], fw, F[3] - chip - gap, i, 'thin');
+    eqChip(cx - Math.min(fsw - 6, 30 * UK) / 2, F[1] + F[3] - chip, Math.min(fsw - 6, 30 * UK), chip, i);
+  }
+  eqWidthKnob(kx, ky, ks);
+  var E = ui.eqWheel = glass(G[0], G[1], G[2], G[3], 'Colors EQ: drag a band around the ring for its hue, in or out for its saturation; the wheel sets its width');
+  var g = E.g, w = E.w, cx0 = w / 2, cy0 = E.h / 2, rIn = 0.13 * w, rMax = 0.37 * w, rRing = 0.43 * w, ringW = 0.05 * w;
+  var ang = function (hu) { return hu / 360 * TAU - Math.PI / 2; }, rOf = function (v) { return rIn + Math.min(2, v) / 2 * (rMax - rIn); };
+  var dot = function (i) { var a = ang(params['eqH' + i]), r = rOf(params['eqG' + i]); return [cx0 + r * Math.cos(a), cy0 + r * Math.sin(a)]; };
+  ui.eqParts.push(function () {
+    var c = E.x; c.clearRect(0, 0, w, E.h);
+    for (var j = 0; j < 120; j++) {   // the hue ring
+      c.beginPath(); c.arc(cx0, cy0, rRing, ang(j * 3) - 0.004, ang(j * 3 + 3) + 0.004);
+      c.strokeStyle = 'hsl(' + j * 3 + ',85%,55%)'; c.lineWidth = ringW; c.stroke();
+    }
+    c.lineWidth = 2;
+    [0.5, 1, 1.5].forEach(function (v) { c.strokeStyle = v === 1 ? 'rgba(220,232,255,0.4)' : 'rgba(143,141,146,0.25)'; c.setLineDash(v === 1 ? [] : [6, 8]); c.beginPath(); c.arc(cx0, cy0, rOf(v), 0, TAU); c.stroke(); });
+    c.setLineDash([]);
+    c.beginPath();
+    for (var hh = 0; hh <= 360; hh += 3) { var a = ang(hh), r = rOf(eqAt(hh)); c[hh ? 'lineTo' : 'moveTo'](cx0 + r * Math.cos(a), cy0 + r * Math.sin(a)); }
+    c.closePath(); c.save(); c.globalAlpha = 0.16; c.fillStyle = P.accent; c.fill(); c.restore();
+    c.strokeStyle = P.accent; c.lineWidth = 4; c.shadowColor = P.accentGlow; c.shadowBlur = 10; c.stroke(); c.shadowBlur = 0;
+    for (var i = 0; i < EQ_N; i++) {
+      var d = dot(i), col = eqHueCss(i), sel = i === eqSel;
+      c.strokeStyle = col; c.globalAlpha = 0.35; c.lineWidth = 2; c.beginPath(); c.moveTo(cx0 + rIn * Math.cos(ang(params['eqH' + i])), cy0 + rIn * Math.sin(ang(params['eqH' + i]))); c.lineTo(d[0], d[1]); c.stroke(); c.globalAlpha = 1;
+      if (sel) { c.lineWidth = 5; c.beginPath(); c.arc(cx0, cy0, rRing - ringW * 0.9, ang(params['eqH' + i] - params['eqW' + i]), ang(params['eqH' + i] + params['eqW' + i])); c.stroke(); }
+      c.beginPath(); c.arc(d[0], d[1], 0.034 * w, 0, TAU); c.fillStyle = col; c.fill(); c.strokeStyle = sel ? '#fff' : '#0b0b0c'; c.lineWidth = sel ? 4 : 3; c.stroke();
+    }
+    g.setAttribute('aria-valuetext', EQ_NAMES.map(function (n, j) { return n + ' ' + params['eqG' + j].toFixed(2) + 'x at ' + Math.round(params['eqH' + j]) + '°'; }).join(', '));
+  });
+  var pos = function (e) { var r = g.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * w, (e.clientY - r.top) / r.height * E.h]; };
+  var nearest = function (p) {
+    var best = 0, bd = 1e9;
+    for (var i = 0; i < EQ_N; i++) { var d = dot(i), dd = Math.hypot(p[0] - d[0], p[1] - d[1]); if (dd < bd) { bd = dd; best = i; } }
+    return best;
+  };
+  eqDrag(g, pos, nearest, function (i, p) {
+    var dx = p[0] - cx0, dy = p[1] - cy0;
+    params['eqH' + i] = Math.round(((Math.atan2(dy, dx) + Math.PI / 2) / TAU * 360 + 360) % 360);
+    eqSetGain(i, (Math.hypot(dx, dy) - rIn) / (rMax - rIn) * 2);
+  });
 }
 
 // LFO window (Advanced page): four oscillators above their four target keys. Each oscillator has a waveform screen (tap
@@ -828,7 +1029,7 @@ function drawEq() {
 // page to pick one (pickLfo). Tall window (portrait): one oscillator per row, the target keys 2 x 2 under a Targets
 // rule. Wide window (landscape): one LFO per column, its target key at the foot.
 function buildLfo(b, m) {
-  secBox(b, 'LFO', 'chroma');
+  secBox(b, 'Modulation', 'chroma');
   ui.lfoWave = []; ui.lfoTarget = [];
   var ks = 42 * UK, tab = 9 * UL, er = itemExt('lfo0Rate', ks), ed = itemExt('lfo0Depth', ks), kh = 28 * UK, i, x;
   var top = Math.max(er.top, ed.top), rowH = top + Math.max(er.bot, ed.bot);
@@ -1269,7 +1470,7 @@ uniform float u_hue;
 uniform float u_saturate;
 uniform float u_brightness;
 uniform float u_contrast;
-uniform float u_satEq[12];   // hue EQ bands, 30 degrees apart from red
+uniform vec3  u_eqBand[7];   // Colors EQ bands: gain, centre hue (turns), width (turns)
 uniform float u_eqOn;
 
 // chromakey
@@ -1330,15 +1531,17 @@ vec3 saturateColor(vec3 c, float amount) {
   return mix(gray, c, amount);
 }
 
-// Hue EQ: saturation scaled by a smooth periodic curve through the 12 bands (Catmull-Rom), at the pixel's hue.
-float eqBand(int j) { return u_satEq[(j + 12) % 12]; }
+// Colors EQ: saturation times 1 + the sum of each band's (gain - 1) x its bell (a Gaussian of the hue distance over the
+// band's width), at the pixel's hue.
 vec3 hueEq(vec3 c) {
   c = clamp(c, 0.0, 1.0);
-  float p = rgb2hsv(c).x * 12.0, fi = floor(p), t = p - fi;
-  int i = int(fi);
-  float a = eqBand(i - 1), b = eqBand(i), d1 = eqBand(i + 1), d2 = eqBand(i + 2);
-  float k = max(0.0, b + 0.5 * t * (d1 - a + t * (2.0 * a - 5.0 * b + 4.0 * d1 - d2 + t * (3.0 * (b - d1) + d2 - a))));
-  return saturateColor(c, k);
+  float h = rgb2hsv(c).x, k = 1.0;
+  for (int i = 0; i < 7; i++) {
+    vec3 b = u_eqBand[i];
+    float d = abs(fract(h - b.y + 0.5) - 0.5) / b.z;
+    k += (b.x - 1.0) * exp(-0.5 * d * d);
+  }
+  return saturateColor(c, max(k, 0.0));
 }
 
 vec3 brightnessColor(vec3 c, float amount) { return c + amount; }
@@ -1462,7 +1665,7 @@ var FEEDBACK_UNIFORMS = [
   'u_feedback', 'u_zoom', 'u_rotate', 'u_translate', 'u_hueDrift',
   'u_mix', 'u_frequency', 'u_speed', 'u_sync', 'u_noiseSpeed', 'u_shapeSides', 'u_shapeSmoothing',
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
-  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_satEq', 'u_eqOn',
+  'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_eqBand', 'u_eqOn',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
   'u_blendMode', 'u_modulateAmount'
 ];
@@ -1559,7 +1762,7 @@ window.addEventListener('beforeunload', function () { if (cam.stream) cam.stream
 // -------------------------------------------------------------
 // 7. Uniform upload + render loop
 // -------------------------------------------------------------
-var eqVals = new Float32Array(EQ_N);
+var eqVals = new Float32Array(EQ_N * 3);
 // p: the frame's parameters (liveParams: params with the LFOs applied).
 function uploadFeedbackUniforms(t, p) {
   p = p || liveParams(t);
@@ -1588,8 +1791,8 @@ function uploadFeedbackUniforms(t, p) {
   gl.uniform1f(u.u_saturate, p.saturate);
   gl.uniform1f(u.u_brightness, p.brightness);
   gl.uniform1f(u.u_contrast, p.contrast);
-  for (var e = 0; e < EQ_N; e++) eqVals[e] = p['eq' + e];
-  gl.uniform1fv(u.u_satEq, eqVals);
+  for (var e = 0; e < EQ_N; e++) { eqVals[3 * e] = p['eqG' + e]; eqVals[3 * e + 1] = p['eqH' + e] / 360; eqVals[3 * e + 2] = p['eqW' + e] / 360; }
+  gl.uniform3fv(u.u_eqBand, eqVals);
   gl.uniform1f(u.u_eqOn, eqActive() ? 1 : 0);
   gl.uniform1f(u.u_chromakeyEnabled, p.chromakeyEnabled ? 1 : 0);
   gl.uniform3f(u.u_chromakeyColor, key[0], key[1], key[2]);
