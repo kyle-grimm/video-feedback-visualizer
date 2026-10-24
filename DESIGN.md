@@ -1097,3 +1097,21 @@ Cost: about 0.30–0.34 ms per frame for all strategies on a GTX 1070, within no
 ## 33. Mod page colours (2026-10-24)
 Modulation now takes the red Feedback family colours (fam 'feedback': window surface, nameplate, knob pointers and
 labels) and Mix the green Chromakey family (fam 'chroma').
+
+## 34. Guard fixed to Breathe; coloured header keys (2026-10-24)
+- **Guard**: Breathe is now always on, with no key. The Color window is back to four knobs. While the measured field
+  runs away (saturated, white, black or flat; triggers as in §30), Persistence is shortened by up to 45%, eased in and
+  out. Dull, Auto, AGC, Sharpen and Hybrid are removed, along with the shader's guard operations and `guardMode`;
+  they are recoverable from git at 85d2eda. Results with it always on (headless, as in §30): Contrast 1.1 +
+  Saturation 4/3 is 100% healthy (was black); Saturation 4/3 is 73% healthy (was flat magenta); Add at Persistence 0.97
+  is 53% white (was 100%). On the default image it acts at times (its saturation peaks past the trigger): mean
+  saturation 0.77 vs 0.93 without it, flicker 3.5 vs 1.6. Cost about 0.31 ms per frame, as without it.
+- **Header keys**, each in its own colour in both schemes (the Style Lab's key CSS, classes hk-green / hk-blue /
+  hk-yellow / hk-rec):
+  - Main/Mod **green**.
+  - Freeze/Play **blue**: it now reads Play while frozen. Its old blue-tint-when-on treatment is gone.
+  - Presets/Output **yellow** with dark type: while the presets window is open the key reads Output and closes it.
+    Saving is the window's own Save button; the key no longer saves.
+  - Record red.
+  - Day/Night keeps the other scheme's colours.
+  All follow §32: they name the option a tap gives.

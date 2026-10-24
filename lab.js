@@ -775,9 +775,12 @@
   }
   function schemeCss(st) {
     var om = S.mode === 'day' ? 'night' : 'day', css = keyCss('#stage .hk', st) + keyCss('#stage .hk.hk-scheme', resolve(S.looks[om] || BUILTIN[om]));
-    css += '#stage .hk.key-tint[aria-pressed="true"]{background:linear-gradient(to bottom,#5b8fe0,#3568b8)!important;color:#fff!important}' +
-      '#stage .hk.key-tint:not([aria-pressed="true"]){color:' + (st.sLight < 0.5 ? '#86aaf5' : '#2f62c2') + '!important}\n';
-    css += '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}\n';
+    // Header keys in their own colours, the same in both schemes: Main/Mod green, Freeze/Play blue, Presets/Output
+    // yellow (dark type), Record red.
+    css += '#stage .hk.hk-green{background:linear-gradient(to bottom,#4cc06c,#2f9a4c 55%,#247c3c)!important;color:#fff!important}\n' +
+      '#stage .hk.hk-blue{background:linear-gradient(to bottom,#5b8fe0,#3f74c9 55%,#3062ae)!important;color:#fff!important}\n' +
+      '#stage .hk.hk-yellow{background:linear-gradient(to bottom,#f6d94e,#e6bb26 55%,#cc9f14)!important;color:#2b2408!important}\n' +
+      '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}\n';
     if (S.mode === 'day') css += '#stage .bezel{background:' + hsl(STAGES.slate[0], STAGES.slate[1], STAGES.slate[2]) + '!important}\n';
     return css;
   }
