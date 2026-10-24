@@ -249,8 +249,8 @@ var PD = {
   // Color
   hue: { min: 0, max: 360, def: 0, step: 1, f: deg },
   saturate: { min: 2 / 3, max: 4 / 3, def: 1.1, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
-  brightness: { min: -1 / 3, max: 1 / 3, def: 0, step: 0.005, snap: 0, f: function (v) { return sgn(v, 2); } },
-  contrast: { min: 0, max: 2, def: 1.03, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
+  brightness: { min: -1 / 30, max: 1 / 30, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v, 3); } },
+  contrast: { min: 0.9, max: 1.1, def: 1.03, step: 0.0005, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
   // Chromakey (key colour as HSL)
   keyHue: { min: 0, max: 360, def: 120, step: 1, f: deg },
   keySat: { min: 0, max: 1, def: 1, step: 0.01, f: pct },
@@ -2563,7 +2563,8 @@ function savePresetNew() {
 function recallPresetById(id) {
   var p = loadPresets().filter(function (x) { return x.id === id; })[0];
   if (!p || !p.params) return;
-  Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = p.params[k]; });
+  // Values saved before a knob's range was narrowed are brought inside it.
+  Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = PD[k] && typeof p.params[k] === 'number' ? clamp(p.params[k], PD[k].min, PD[k].max) : p.params[k]; });
   syncUI();
   presetsActive = id;
   renderPresets();

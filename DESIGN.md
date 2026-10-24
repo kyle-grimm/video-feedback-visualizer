@@ -966,3 +966,8 @@ the landscape window. Tested in headless Chrome at 900 × 1340 and 1340 × 910: 
 window without overlapping; each style's drag, tap, encoder and key interactions change the intended parameters; no
 console errors.
 
+
+## 27. Brightness and Contrast at a tenth of their range (2026-10-24)
+Brightness now spans ±1/30 (was ±1/3) and Contrast 0.9–1.1× (was 0–2×), with finer steps (0.0005) so both stay
+smooth rather than stepped. The default contrast (1.03×) is unchanged. Recalling a preset clamps every numeric value into its
+knob's current range, so presets saved with the old wide values land at the ends of the new ones.
