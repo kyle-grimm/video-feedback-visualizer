@@ -921,3 +921,19 @@ LFO 1 on Zoom at Depth 100% swings the drawn zoom 0.81–1.2 around 1.012; no GL
 Tested in headless Chrome at 900 x 1340 and 1340 x 910: all four styles build in both layouts, a fader drag to the top
 gives 2×, double-click 1×; every gain 0 with wide bands turns the output grey (chroma 223 → 0); no GL or console
 errors.
+
+## 25. Modulation layouts (2026-10-24)
+The Modulation window lays out its four LFO channels (each: **Wave** screen, **Speed**, **Depth**, **Target** key) in
+one of four styles, picked in the app with keys **1–4** beside the style's name (on the window's top edge, or inside it
+under the nameplate when they don't fit; kept in localStorage `vfv-mod-style`):
+1. **Rows**: a channel per row, Wave · Speed · Depth · Target left to right; in a narrow window (portrait) Target sits
+   under Wave.
+2. **Columns**: a channel per column, Wave, Speed, Depth and Target top to bottom.
+3. **Grid**: the channels as 2 × 2 tiles, Wave over the two knobs over Target; wide tiles (landscape) put Wave and
+   Target on the left and the knobs on the right.
+4. **Matrix**: a table with a row per feature, labelled Wave / Speed / Depth / Target, and a column per channel; in a
+   wide window it turns (a column per feature under a header, a row per channel). The knobs drop their own labels.
+Rows, Columns and Grid sit each channel on a faint plate. The style keys and their name chip are shared with Colors EQ
+(`frameKeys`, `pickStyle`). The old Targets rule (`lfoRule`) is gone.
+Tested in headless Chrome at 900 x 1340 and 1340 x 910: every style builds 4 wave screens, 8 knobs and 4 target keys,
+none overlapping and all inside the window; tapping a wave screen steps its waveform; no console errors.
