@@ -1085,3 +1085,11 @@ Cost: about 0.30–0.34 ms per frame for all strategies on a GTX 1070, within no
   screen.
 - **Lab key removed** from the screen. The Style Lab still applies the colour schemes; its window opens only from the
   address (`#lab`, `#tune=...`), and a Lab left open by an earlier session starts closed.
+
+## 32. Standing UI rules (from Kyle, 2026-10-24)
+1. **Toggle keys name only the alternative.** A key that switches between views or modes (Day / Night, Main / Mod)
+   shows only the option the user can switch to now: "Night" while in Day, "Mod" while on Main. It never shows the
+   current state, and never both names. The Main / Mod key now follows this (it had shown both with the current one
+   underlined, §31).
+2. **Don't stretch to fill.** Avoid extending a key, row or column so it wastes space. When something doesn't fit or
+   leaves a gap, find a different arrangement, commit it, and flag that decision for Kyle to review.

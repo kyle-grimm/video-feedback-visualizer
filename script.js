@@ -354,7 +354,7 @@ var LFO_TARGETS = {};
 Object.keys(SECTIONS).forEach(function (f) { SECTIONS[f].items.forEach(function (id) { if (PD[id]) LFO_TARGETS[id] = 1; }); });
 // The Mod page (internally 'adv'; experimental): the Colors hue EQ along the whole bottom; above it on the right, the
 // Modulation window (four LFOs over their four target keys, in the green Chromakey family colours) and the Mix window
-// (the XY pad, in the purple Transform family colours). The Main / Mod header key switches; the choice is kept. pickLfo >= 0 while the Main page is open to pick that LFO's target.
+// (the XY pad, in the purple Transform family colours). The header key naming the other page switches; the choice is kept. pickLfo >= 0 while the Main page is open to pick that LFO's target.
 var page = 'main';
 try { if (localStorage.getItem('vfv-page') === 'adv') page = 'adv'; } catch (e) { /* main */ }
 var pickLfo = -1;
@@ -379,32 +379,24 @@ function makeScreen(x, y, w, h) {
   if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys: Day/Night, Main / Mod (the page), Freeze, Presets (Save while the presets window is open), Record (Capture
+// Header keys: Day/Night and Main/Mod (each naming the option it switches to), Freeze, Presets (Save while the presets window is open), Record (Capture
 // while frozen) in the NKEYS rects [x, y, w, h].
 // The label size shrinks from fs if the longest label the keys can show would not fit the key width. Class hk marks
 // them for the Style Lab, which colours them to the background (the Day/Night key in the other scheme's colours, the
 // Record key red).
-var NKEYS = 5, KEY_LABELS = ['Night', 'Day', 'Freeze', 'Presets', 'Save', 'Record', 'Capture', 'Stop', 'Saving'];
+var NKEYS = 5, KEY_LABELS = ['Night', 'Day', 'Main', 'Mod', 'Freeze', 'Presets', 'Save', 'Record', 'Capture', 'Stop', 'Saving'];
 function makeKeys(r, fs) {
   fs = fs || 10;
   var widest = Math.max.apply(null, KEY_LABELS.map(function (t) { return textW(t.toUpperCase(), fs, 700, 0.08); }));
   fs = Math.min(fs, Math.floor(fs * (r[0][2] - 10) / widest * 10) / 10);
   var K = function (i, label, led, o, cls) { o.fs = fs; var k = key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); k.b.className += ' hk' + (cls ? ' ' + cls : ''); return k; };
   ui.scheme = K(0, 'Day', null, { aria: 'Day / night colour scheme', onClick: toggleScheme }, 'hk-scheme');
-  ui.pageKey = K(1, '', null, { aria: 'Page', onClick: function () { setPage(page === 'adv' ? 'main' : 'adv'); } });
+  ui.pageKey = K(1, page === 'adv' ? 'Main' : 'Mod', null, { aria: 'Page', onClick: function () { setPage(page === 'adv' ? 'main' : 'adv'); } });
   ui.freeze = K(2, 'Freeze', 'off', { tint: 'blue', aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; ui.freeze.set(frozen ? 'on' : 'off'); syncRec(); } });
   ui.presets = K(3, 'Presets', null, { aria: 'Presets', onClick: presetsKey });
   ui.rec = K(4, 'Record', 'off', { noLed: true, aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
-  // Main / Mod: both names, the page on show at full strength and underlined, the other dimmed (works on light and dark
-  // keys alike); sized down on its own if the names don't fit the key.
-  // A tall key (landscape's column of keys) stacks the two names.
-  var pk = ui.pageKey, tall = r[1][3] > r[1][2] * 1.3, pf = Math.min(fs, Math.floor(fs * (r[1][2] - 12) / textW(tall ? 'MAIN' : 'MAIN  MOD', fs, 700, 0.08) * 10) / 10);
-  pk.b.style.fontSize = pf + 'px'; pk.txt.style.cssText = 'display:flex;gap:' + Math.round(pf * (tall ? 0.5 : 0.7)) + 'px;align-items:' + (tall ? 'center;flex-direction:column' : 'baseline');
-  [['main', 'Main'], ['adv', 'Mod']].forEach(function (p) {
-    var on = page === p[0];
-    el('span', 'padding-bottom:' + Math.max(2, Math.round(pf * 0.15)) + 'px;border-bottom:' + Math.max(1.5, Math.round(pf * 0.1)) + 'px solid ' + (on ? 'currentColor' : 'transparent') + ';opacity:' + (on ? 1 : 0.4), pk.txt, p[1]);
-  });
-  pk.b.setAttribute('aria-label', 'Page: ' + (page === 'adv' ? 'Mod' : 'Main') + ' (tap for ' + (page === 'adv' ? 'Main' : 'Mod') + ')');
+  // Main / Mod, like Day / Night, names only the page the key switches to (DESIGN.md §32).
+  ui.pageKey.b.setAttribute('aria-label', 'Switch to the ' + (page === 'adv' ? 'Main' : 'Mod') + ' page');
   ui.freeze.set(frozen ? 'on' : 'off'); syncScheme(); syncRec(); syncPresetsKey(); renderPresets();
 }
 // Camera cluster centred on (cx, cy): a tall On key on the left, Back over Front on the right, label below.
