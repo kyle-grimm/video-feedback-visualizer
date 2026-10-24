@@ -984,3 +984,39 @@ towards 0. Above the middle the fill is white.
 Tested in headless Chrome at 900 x 1340 and 1340 x 910: Modulation builds 4 waves, 8 knobs and 4 targets with no
 overlaps; the EQ builds 7 equal columns (108 px / 26 px wide); fills check out (1.6x: colour half plus 30% white;
 0.4x: 20% greyed; 0x: empty); no errors.
+
+## 29. Flicker reduction (2026-10-24)
+Measured with a flicker meter (scratch test, headless Chrome, 720 x 1280). It renders deterministic frames, reads the
+displayed image, and per pixel compares successive luminance changes. Reversal energy, sqrt(mean(max(0, -d1·d2))), is
+the frame-to-frame back-and-forth; motion, mean |d1|, is all change. Units are 8-bit levels.
+
+| setting | before: flicker / motion | after: flicker / motion |
+|---|---|---|
+| default | 5.80 / 5.82 | 2.71 / 4.45 |
+| Diff blend | 6.95 / 7.98 | 1.88 / 4.34 |
+| Delay 5 | 3.03 / 3.03 | 0.08 / 0.37 |
+| zoom 0.94 | 4.54 / 4.41 | 2.29 / 3.41 |
+| Noise layer | 4.29 / 5.45 | 3.61 / 5.16 |
+
+Before, nearly all change at the default settings was reversal: pixels flipped between two values on alternate frames.
+Diagnosis: with zoom, rotate, drift and Modulate at 0 the flicker was ~0. Hue Drift and the in-loop Contrast and
+Saturation (above 1) each roughly doubled it. Moving edges, resampled every frame, get amplified.
+Changes:
+- **Half-float feedback slots** (RGBA16F, via EXT_color_buffer_float / _half_float, checked with a framebuffer
+  completeness test, `detectFloatBuffers`; re-detected after a context loss). The fallback is RGBA8 with triangular
+  dither written in the loop (`u_dither`). The display pass adds a fixed triangular dither when dropping to the 8-bit
+  canvas. This removes rounding drift and banding; the meter barely moves (default 1.15 vs 1.05 with diffusion).
+- **Diffusion** (`DIFFUSE` 0.1): the feedback read takes four extra taps 0.6 px off diagonally, as a camera's optics blur
+  analogue feedback (the averaging term in Crutchfield's model). This is the largest single gain (default 1.91 → 1.05
+  in the ablation with the other fixes in).
+- **Diff**: the display shows the average of the last two frames (the loop itself still alternates).
+- **Delay**: the loop always reads the last frame and mixes in a 50% tap from `delay` frames further back. Reading only
+  the old frame interleaved delay + 1 separate loops and strobed between them.
+- **Camera**: two textures, crossfaded from the previous frame to the newest over one camera frame interval (smoothed,
+  15–100 ms), so a 24–30 fps camera doesn't step every other render. Costs up to one camera frame of latency.
+- The bench hook hashes the 8-bit canvas after a display pass (`readPixels` as bytes can't read half-float slots).
+Tried and not kept:
+- **A soft knee instead of the final clamp**: at the defaults no pixel reaches 0 or 1, so the clamp wasn't a cause.
+  A knee that eases into 0 sits above the identity line, so blacks drift up (mean 54 → 67).
+- **Centring Modulate's offset on zero**: it cut default flicker to 1.05, but it took out the marbling, the look's main
+  texture (motion 5.8 → 1.3, large flat bands). The one-sided offset stays.

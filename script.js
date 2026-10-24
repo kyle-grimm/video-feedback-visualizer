@@ -1868,10 +1868,23 @@ function drawFullscreenTriangle() { gl.drawArrays(gl.TRIANGLES, 0, 3); }
 // texture in one draw call - see DESIGN.md section 2. This is that
 // same ping-pong technique generalized to RING_SIZE slots: each frame
 // writes into the next slot and reads from `1 + delay` slots behind it.
+// The slots are half-float (RGBA16F) where the GPU can render to it: 8-bit slots round every pixel to 1/255 on each pass,
+// and the loop amplifies that rounding into crawling speckle and pixels toggling between neighbouring levels. Otherwise
+// RGBA8, with dither in the loop (u_dither). Extensions must be enabled again after a context loss, hence a function.
+function detectFloatBuffers() {
+  if (!gl.getExtension('EXT_color_buffer_float') && !gl.getExtension('EXT_color_buffer_half_float')) return false;
+  var t = gl.createTexture(), f = gl.createFramebuffer();
+  gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 4, 4, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  var ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(f); gl.deleteTexture(t);
+  return ok;
+}
+var FB_FLOAT = detectFloatBuffers();
 function createFBO(w, h) {
   var tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texImage2D(gl.TEXTURE_2D, 0, FB_FLOAT ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, FB_FLOAT ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -1979,6 +1992,11 @@ precision highp float;
 uniform sampler2D u_prevFrame;
 uniform vec2  u_resolution;
 uniform float u_time;
+uniform sampler2D u_delayFrame;   // the Delay tap: the frame Delay frames further back
+uniform float u_delayMix;         // its share of the feedback read (0 when Delay is Live)
+uniform float u_diffuse;          // weight of each of the four diffusion taps
+uniform float u_dither;           // dither amplitude written into 8-bit slots (0 with half-float slots)
+uniform float u_frameSeed;
 
 // feedback
 uniform float u_feedback;
@@ -1997,6 +2015,8 @@ uniform float u_shapeSides;
 uniform float u_shapeSmoothing;
 uniform float u_noiseScale;
 uniform sampler2D u_camera;
+uniform sampler2D u_cameraPrev;   // the camera frame before u_camera
+uniform float u_camMix;           // crossfade from u_cameraPrev to u_camera over one camera frame
 uniform float u_cameraAspect;
 uniform float u_cameraOn;
 uniform float u_cameraMirror;
@@ -2086,6 +2106,8 @@ vec3 contrastColor(vec3 c, float amount) { return (c - 0.5) * amount + 0.5; }
 
 vec2 modulateUV(vec2 st, vec4 b, float amount) { return st + b.xy * amount; }
 
+float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+
 vec4 blendFn(vec4 prev, vec4 gen, int mode, float feedback) {
   if (mode == 0) return vec4(mix(gen.rgb, min(prev.rgb, gen.rgb), feedback), 1.0);
   if (mode == 2) return vec4(prev.rgb * feedback + gen.rgb, 1.0);
@@ -2131,7 +2153,7 @@ vec4 genCamera(vec2 st) {
   float ca = aspect();
   vec2 scale = u_cameraAspect > ca ? vec2(ca / u_cameraAspect, 1.0) : vec2(1.0, u_cameraAspect / ca);
   uv = (uv - 0.5) * scale + 0.5;
-  return vec4(texture(u_camera, uv).rgb, u_cameraOn);
+  return vec4(mix(texture(u_cameraPrev, uv).rgb, texture(u_camera, uv).rgb, u_camMix), u_cameraOn);
 }
 
 // The four layers crossfaded by the mixer weights; whatever they leave
@@ -2161,7 +2183,13 @@ void main() {
   fbUV += u_translate;
   if (u_modulateAmount > 0.0001) fbUV = modulateUV(fbUV, gen, u_modulateAmount);
 
-  vec4 prev = texture(u_prevFrame, fract(fbUV));
+  // Diffusion: last frame's image slightly blurred (four taps 0.6 px off diagonally), as a camera's optics blur real
+  // video feedback; it damps the pixel-scale back-and-forth that resampling and in-loop contrast otherwise amplify.
+  vec2 dd = 0.6 / u_resolution;
+  vec4 prev = texture(u_prevFrame, fract(fbUV)) * (1.0 - 4.0 * u_diffuse)
+    + (texture(u_prevFrame, fract(fbUV + dd)) + texture(u_prevFrame, fract(fbUV - dd))
+     + texture(u_prevFrame, fract(fbUV + vec2(dd.x, -dd.y))) + texture(u_prevFrame, fract(fbUV + vec2(-dd.x, dd.y)))) * u_diffuse;
+  if (u_delayMix > 0.0) prev = mix(prev, texture(u_delayFrame, fract(fbUV)), u_delayMix);
   prev.rgb = u_hueDrift != 0.0 ? hueRotate(prev.rgb, u_hueDrift) : clamp(prev.rgb, 0.0, 1.0);
 
   // Chromakey: pixels of the fresh layer mix close to the key color are
@@ -2181,19 +2209,29 @@ void main() {
   result.rgb = brightnessColor(result.rgb, u_brightness);
   result.rgb = contrastColor(result.rgb, u_contrast);
   result.rgb = clamp(result.rgb, 0.0, 1.0);
+  if (u_dither > 0.0) result.rgb += u_dither * (hash12(gl_FragCoord.xy + u_frameSeed) + hash12(gl_FragCoord.xy + u_frameSeed + 71.3) - 1.0);
   result.a = 1.0;
 
   fragColor = result;
 }`;
 
-// The display pass is a plain blit of the feedback FBO to the canvas.
+// The display pass copies the feedback image to the canvas. In Diff, whose loop flips pixels between two values on
+// alternate frames, it shows the average of the last two frames (u_avg 0.5). With half-float slots it adds a fixed
+// (not frame-varying) dither as it drops to the canvas's 8 bits, so smooth gradients don't band.
 var DISPLAY_FRAGMENT_SRC = `#version 300 es
 precision highp float;
 uniform sampler2D u_frame;
+uniform sampler2D u_prev;
+uniform float u_avg;
+uniform float u_outDither;
 in vec2 v_uv;
 out vec4 fragColor;
+float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 void main() {
-  fragColor = texture(u_frame, v_uv);
+  vec3 c = texture(u_frame, v_uv).rgb;
+  if (u_avg > 0.0) c = mix(c, texture(u_prev, v_uv).rgb, u_avg);
+  c += u_outDither * (hash12(gl_FragCoord.xy) + hash12(gl_FragCoord.xy + 71.3) - 1.0) / 255.0;
+  fragColor = vec4(c, 1.0);
 }`;
 
 var FEEDBACK_UNIFORMS = [
@@ -2203,14 +2241,14 @@ var FEEDBACK_UNIFORMS = [
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
   'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_eqBand', 'u_eqOn',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
-  'u_blendMode', 'u_modulateAmount'
+  'u_blendMode', 'u_modulateAmount', 'u_delayFrame', 'u_delayMix', 'u_diffuse', 'u_dither', 'u_frameSeed', 'u_cameraPrev', 'u_camMix'
 ];
 var feedbackProgram, displayProgram, feedbackUniforms, displayUniforms;
 function linkPrograms() {
   feedbackProgram = linkProgram(VERTEX_SRC, FEEDBACK_FRAGMENT_SRC);
   displayProgram = linkProgram(VERTEX_SRC, DISPLAY_FRAGMENT_SRC);
   feedbackUniforms = uniformLocations(feedbackProgram, FEEDBACK_UNIFORMS);
-  displayUniforms = uniformLocations(displayProgram, ['u_frame']);
+  displayUniforms = uniformLocations(displayProgram, ['u_frame', 'u_prev', 'u_avg', 'u_outDither']);
 }
 linkPrograms();
 
@@ -2234,9 +2272,12 @@ function createCameraTexture() {
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
   return tex;
 }
-var cameraTexture = createCameraTexture();
-var camTexW = 0, camTexH = 0;          // size the camera texture is allocated at (0 = still the 1x1 placeholder)
-var camFrameNew = false, camLastTime = -1;
+// Two textures, the newest frame (cameraTexture) and the one before (cameraPrevTexture): the shader crossfades from
+// the older to the newer over one camera frame, so the 24-30 fps camera doesn't step every other render frame (each
+// step is a jolt the feedback loop carries on). Each texture's allocated size is kept on it (w, h; 0 = the 1x1
+// placeholder).
+var cameraTexture = createCameraTexture(), cameraPrevTexture = createCameraTexture();
+var camFrameNew = false, camLastTime = -1, camNewAt = 0, camPeriod = 33;
 var HAS_RVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
 
 // Note each new decoded camera frame (the camera runs at 24-30 fps, the render loop at 60).
@@ -2254,14 +2295,18 @@ function updateCameraTexture() {
   if (!cam.stream || cameraVideo.readyState < 2) return; // HAVE_CURRENT_DATA
   if (mixWeights()[0] <= 0.001) return;
   var fresh = HAS_RVFC ? camFrameNew : cameraVideo.currentTime !== camLastTime;
-  if (!fresh && camTexW) return;
+  if (!fresh && cameraTexture.w) return;
   camFrameNew = false; camLastTime = cameraVideo.currentTime;
   var w = cameraVideo.videoWidth, h = cameraVideo.videoHeight;
   if (!w || !h) return;
   cam.aspect = w / h;
-  gl.bindTexture(gl.TEXTURE_2D, cameraTexture);
-  if (w === camTexW && h === camTexH) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo);
-  else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo); camTexW = w; camTexH = h; }
+  var now = performance.now();
+  if (camNewAt) camPeriod = clamp(camPeriod * 0.8 + (now - camNewAt) * 0.2, 15, 100);   // the camera's frame interval, smoothed
+  camNewAt = now;
+  var t = cameraPrevTexture; cameraPrevTexture = cameraTexture; cameraTexture = t;   // the new frame goes into the older texture
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  if (w === t.w && h === t.h) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo);
+  else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cameraVideo); t.w = w; t.h = h; }
 }
 
 function stopCamera() {
@@ -2299,6 +2344,7 @@ window.addEventListener('beforeunload', function () { if (cam.stream) cam.stream
 // 7. Uniform upload + render loop
 // -------------------------------------------------------------
 var eqVals = new Float32Array(EQ_N * 3);
+var DIFFUSE = 0.1;   // weight of each diffusion tap (0 = none; see the feedback shader)
 // p: the frame's parameters (liveParams: params with the LFOs applied).
 function uploadFeedbackUniforms(t, p) {
   p = p || liveParams(t);
@@ -2320,6 +2366,11 @@ function uploadFeedbackUniforms(t, p) {
   gl.uniform1f(u.u_shapeSmoothing, FIXED.shapeSmoothing);
   gl.uniform1f(u.u_noiseScale, p.noiseScale);
   gl.uniform1i(u.u_camera, 1);
+  gl.uniform1i(u.u_delayFrame, 2);
+  gl.uniform1i(u.u_cameraPrev, 3);
+  gl.uniform1f(u.u_camMix, clamp((performance.now() - camNewAt) / camPeriod, 0, 1));
+  gl.uniform1f(u.u_diffuse, DIFFUSE);
+  gl.uniform1f(u.u_dither, FB_FLOAT ? 0 : 1 / 255);
   gl.uniform1f(u.u_cameraAspect, cam.aspect);
   gl.uniform1f(u.u_cameraOn, cam.stream && cameraVideo.readyState >= 2 ? 1 : 0);
   gl.uniform1f(u.u_cameraMirror, cam.facing === 'user' ? 1 : 0);
@@ -2340,15 +2391,15 @@ function uploadFeedbackUniforms(t, p) {
 
 var lastWritten = buffers[0];
 
+var frameCount = 0;
 function renderFeedbackPass(t) {
-  // delay=0 reads the most recently completed frame (plain ping-pong);
-  // higher delay reads further back. The ring always holds at least
-  // delay+2 slots, so the read can never land on the slot being written.
+  // The loop always reads the most recently completed frame; Delay mixes in a second tap from `delay` frames further
+  // back. (Reading only the old frame split the image into delay + 1 loops interleaved frame by frame, which strobed.)
+  // The ring always holds at least delay+2 slots, so neither read can land on the slot being written.
   var p = liveParams(t), delay = Math.round(p.delay);
   ensureHistory(delay);
   var n = buffers.length, writeIndex = ringWriteIndex;
-  var readIndex = wrapIndex(writeIndex - 1 - delay, n);
-  var write = buffers[writeIndex], read = buffers[readIndex];
+  var write = buffers[writeIndex], read = buffers[wrapIndex(writeIndex - 1, n)], tap = buffers[wrapIndex(writeIndex - 1 - delay, n)];
   gl.bindFramebuffer(gl.FRAMEBUFFER, write.fbo);
   gl.viewport(0, 0, CW, CH);
   gl.useProgram(feedbackProgram);
@@ -2356,7 +2407,13 @@ function renderFeedbackPass(t) {
   gl.bindTexture(gl.TEXTURE_2D, read.tex);
   gl.activeTexture(gl.TEXTURE1);
   gl.bindTexture(gl.TEXTURE_2D, cameraTexture);
+  gl.activeTexture(gl.TEXTURE2);
+  gl.bindTexture(gl.TEXTURE_2D, tap.tex);
+  gl.activeTexture(gl.TEXTURE3);
+  gl.bindTexture(gl.TEXTURE_2D, cameraPrevTexture);
   uploadFeedbackUniforms(t, p);
+  gl.uniform1f(feedbackUniforms.u_delayMix, delay > 0 ? 0.5 : 0);
+  gl.uniform1f(feedbackUniforms.u_frameSeed, (frameCount++ % 997) * 13.7);
   drawFullscreenTriangle();
   lastWritten = write;
   ringWriteIndex = wrapIndex(ringWriteIndex + 1, n);
@@ -2368,7 +2425,12 @@ function renderDisplayPass() {
   gl.useProgram(displayProgram);
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(gl.TEXTURE_2D, lastWritten.tex);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, buffers[wrapIndex(buffers.indexOf(lastWritten) - 1, buffers.length)].tex);   // the frame before
   gl.uniform1i(displayUniforms.u_frame, 0);
+  gl.uniform1i(displayUniforms.u_prev, 1);
+  gl.uniform1f(displayUniforms.u_avg, params.blendMode === 4 ? 0.5 : 0);
+  gl.uniform1f(displayUniforms.u_outDither, FB_FLOAT ? 1 : 0);
   drawFullscreenTriangle();
 }
 
@@ -2406,10 +2468,11 @@ function frame(now) {
 canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); contextLost = true; }, false);
 canvas.addEventListener('webglcontextrestored', function () {
   linkPrograms();
+  FB_FLOAT = detectFloatBuffers();
   buffers = createRingBuffers(2);
   clearScreen();
-  cameraTexture = createCameraTexture();
-  camTexW = camTexH = 0; camFrameNew = true;
+  cameraTexture = createCameraTexture(); cameraPrevTexture = createCameraTexture();
+  camNewAt = 0; camFrameNew = true;
   contextLost = false;
 }, false);
 
@@ -2832,7 +2895,8 @@ if (location.hash.indexOf('#shot') === 0) {
     };
     Object.keys(configs).forEach(function (k) {
       run(configs[k], 60);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, lastWritten.fbo);
+      renderDisplayPass();   // the slots may be half-float, so hash the 8-bit canvas
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.readPixels(0, 0, CW, CH, gl.RGBA, gl.UNSIGNED_BYTE, all);
       var h = 2166136261; for (var i = 0; i < all.length; i += 7) h = Math.imul(h ^ all[i], 16777619) >>> 0;
       out.hash[k] = h.toString(16);
