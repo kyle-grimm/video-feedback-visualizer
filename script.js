@@ -44,10 +44,12 @@ var dragging = false;
 function stageScale() { return parseFloat(stage.dataset.scale || '1'); }
 function showTip(target, text) {
   var r = target.getBoundingClientRect(), s = stage.getBoundingClientRect(), k = stageScale();
+  var lines = String(text).split('\n').length;   // a tip of several lines (the guard's) grows upwards
   tip.textContent = text;
+  tip.style.whiteSpace = lines > 1 ? 'pre' : '';
   tip.style.display = 'block';
   tip.style.left = ((r.left + r.width / 2 - s.left) / k) + 'px';
-  tip.style.top = ((r.top - s.top) / k - 24) + 'px';
+  tip.style.top = ((r.top - s.top) / k - 24 - 15 * (lines - 1)) + 'px';
 }
 function hideTip() { tip.style.display = 'none'; }
 var tipTimer = 0;
@@ -283,7 +285,7 @@ try { eqStyle = Math.max(0, Math.min(EQ_STYLES.length - 1, parseInt(localStorage
 var EQ_WIDTH = { min: 6, max: 120, def: 22, zero: 22, log: true, step: 0.5, f: function (v) { return '±' + Math.round(v) + '°'; } };
 for (q = 0; q < EQ_N; q++) { PD['eqH' + q] = { min: 0, max: 360, def: EQ_HUES[q], zero: EQ_HUES[q], step: 1, f: deg }; PD['eqW' + q] = EQ_WIDTH; }
 PD.eqWsel = EQ_WIDTH;
-var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
+var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75, guardMode: 0 };
 for (q = 0; q < EQ_N; q++) DEFAULTS['eqG' + q] = 1;
 for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
@@ -331,7 +333,7 @@ function box(x, y, w, h) { return LAND ? [y, x + 8, h, w] : [x, y, w, h]; }
 function secBox(b, title, fam) { return sec(b[0], b[1], b[2], b[3], title, fam); }
 function LABEL() { return 'font-size:' + 10 * UL + 'px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:' + P.inkDim + ';white-space:nowrap' + (UL > 1 ? ';line-height:1' : ''); }
 
-// Controls by id: [label, knob options]. 'camera' and 'keyOn' are key clusters, not knobs.
+// Controls by id: [label, knob options]. 'camera', 'keyOn' and 'guard' are keys, not knobs.
 var CONTROLS = {
   blendMode: ['Blend Mode', { ticks: 5, range: 90, after: function () { syncBlendLegend(); }, legend: BLEND_NAMES }],   // a short drag per position
   modulateAmount: ['Modulate'], feedback: ['Persistence'], delay: ['Delay'],
@@ -349,7 +351,7 @@ var SECTIONS = {
   feedback: { title: 'Feedback', items: ['blendMode', 'modulateAmount', 'feedback', 'delay'] },
   chroma: { title: 'Chromakey', items: ['keyOn', 'keyHue', 'keySat', 'keyLight', 'chromakeyThreshold', 'chromakeySoftness'] },
   transform: { title: 'Transform', items: ['zoom', 'rotate', 'translateX', 'translateY', 'hueDrift'] },
-  color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast'] },
+  color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast', 'guard'] },
   layers: { title: 'Layers', items: ['camera', 'oscSize', 'noiseScale', 'shapeSides'] },
   mix: { title: 'Mix', items: [] }
 };
@@ -448,12 +450,50 @@ function makeItem(id, cx, cy, size, o) {
   o = o || {};
   if (id === 'camera') return makeCamera(cx, cy, o.fam);
   if (id === 'keyOn') return makeOnOff(cx, cy, 'chromakeyEnabled', 'Chromakey');
+  if (id === 'guard') return makeGuard(cx, cy, o.fam);
   var c = CONTROLS[id], opts = Object.assign({ fam: o.fam }, c[1] || {});
   var k = knob(cx, cy, size, c[0], id, opts);
   if (id === 'blendMode') ui.blend = k;
   if (opts.legend && o.legend !== false) ringLegend(k, id, opts.legend, cx, cy);
   return k;
 }
+// Runaway guard key (Color window): names the strategy in use; tap for the next one (GUARD). The label under it reads
+// Guard; the key's text glows while the guard is acting, and its tooltip shows the field it measures.
+// The strategies and the guard's state (the engine: guardStep, after the feedback shader).
+var GUARD = [
+  { name: 'Off', about: 'no guard' },
+  { name: 'Dull', about: 'every recursion eases 2.5% towards grey (no measuring)' },
+  { name: 'Auto', about: 'measures the field; while it runs away, cancels the compounding of Saturation and Contrast and eases it towards grey' },
+  { name: 'AGC', about: 'automatic levels, like a video camera’s gain control: holds brightness, spread and saturation near middle targets' },
+  { name: 'Breathe', about: 'shortens Persistence while the field runs away, so the layers refill it' },
+  { name: 'Sharpen', about: 'high-pass detail and a difference blend against a blur, brought in while the field goes flat or white' },
+  { name: 'Hybrid', about: 'Auto and Breathe together' }
+];
+var GUARD_EVERY = 4, GUARD_SYNC = false;   // GUARD_SYNC: read the proxy at once (tests; it stalls the GPU)
+var guard = { stats: null, n: 0, fence: null, sat: 1, gain: 1, offset: 0, pull: 0, sharp: 0, fb: 1, act: 0, ex: null };
+var GUARD_KEY_W = 96;
+function makeGuard(cx, cy, fam) {
+  var k = key(cx - GUARD_KEY_W * UK / 2, cy - 14 * UK, GUARD_KEY_W * UK, 28 * UK, '', null, { fs: 9 * UL, aria: 'Runaway guard',
+    onClick: function () { params.guardMode = (params.guardMode + 1) % GUARD.length; guardReset(); syncGuard(); flashTip(k.b, guardTip()); } });
+  var lab = cl(cx, cy + 14 * UK + 3, 120 * UL, 'Guard', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
+  k.b.addEventListener('pointerenter', function () { showTip(k.b, guardTip()); });
+  k.b.addEventListener('pointerleave', hideTip);
+  ui.guard = k; ui.guardAct = -1;
+  syncers.push(syncGuard); syncGuard();
+}
+function syncGuard() {
+  if (!ui.guard) return;
+  var m = params.guardMode | 0; ui.guard.txt.textContent = GUARD[m].name; ui.guard.b.setAttribute('aria-label', 'Runaway guard: ' + GUARD[m].name);
+  ui.guard.txt.style.color = m ? P.ink : P.inkMute; ui.guardAct = -1; guardUi();
+}
+// Per frame: the key's text glows with how hard the guard is acting.
+function guardUi() {
+  if (!ui.guard) return;
+  var a = params.guardMode ? Math.round(guard.act * 10) / 10 : 0;
+  if (a === ui.guardAct) return;
+  ui.guardAct = a; ui.guard.txt.style.textShadow = a > 0 ? '0 0 ' + (4 + 8 * a) + 'px ' + P.accentGlow : 'none'; ui.guard.txt.style.color = a > 0 ? P.accent : params.guardMode ? P.ink : P.inkMute;
+}
+
 // A chip of the key colour, usually beside the Chromakey nameplate.
 function makeSwatch(x, y) {
   ui.keySwatch = el('span', at(x, y, 26, 12) + ';border-radius:2px;box-shadow:0 0 0 1px #050505,inset 0 1px 0 rgba(255,255,255,0.2)');
@@ -546,6 +586,7 @@ function itemExt(id, ks) {
   var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
   if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 30 * UK, bot: 35 + 20 * (UK - 1) + lab };
   if (id === 'keyOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
+  if (id === 'guard') return { w: Math.max(GUARD_KEY_W * UK, lw('Guard')), top: 14 * UK, bot: 14 * UK + 3 + lab };
   var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab }, names = (CONTROLS[id][1] || {}).legend;
   if (names) {   // the legend around the ring
     var r = R + 7 * UK, bh = 12 * UL;
@@ -1881,10 +1922,10 @@ function detectFloatBuffers() {
   return ok;
 }
 var FB_FLOAT = detectFloatBuffers();
-function createFBO(w, h) {
-  var tex = gl.createTexture();
+function createFBO(w, h, bytes) {   // bytes: always RGBA8 (the guard's proxy, read back as bytes)
+  var tex = gl.createTexture(), f = FB_FLOAT && !bytes;
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, FB_FLOAT ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, FB_FLOAT ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+  gl.texImage2D(gl.TEXTURE_2D, 0, f ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, f ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -1997,6 +2038,13 @@ uniform float u_delayMix;         // its share of the feedback read (0 when Dela
 uniform float u_diffuse;          // weight of each of the four diffusion taps
 uniform float u_dither;           // dither amplitude written into 8-bit slots (0 with half-float slots)
 uniform float u_frameSeed;
+// runaway guard (see GUARD): applied to last frame's image before the blend
+uniform float u_gOn;
+uniform float u_gSat;      // saturation scale
+uniform float u_gGain;     // levels: gain about mid grey
+uniform float u_gOffset;   // levels: offset
+uniform float u_gPull;     // ease towards grey
+uniform float u_gSharp;    // high-pass + difference amount
 
 // feedback
 uniform float u_feedback;
@@ -2190,7 +2238,23 @@ void main() {
     + (texture(u_prevFrame, fract(fbUV + dd)) + texture(u_prevFrame, fract(fbUV - dd))
      + texture(u_prevFrame, fract(fbUV + vec2(dd.x, -dd.y))) + texture(u_prevFrame, fract(fbUV + vec2(-dd.x, dd.y)))) * u_diffuse;
   if (u_delayMix > 0.0) prev = mix(prev, texture(u_delayFrame, fract(fbUV)), u_delayMix);
+  // Guard high-pass: last frame minus a blur 2.5 px wide (four more taps, only while Sharpen acts).
+  vec3 hp = vec3(0.0);
+  if (u_gSharp > 0.0) {
+    vec2 gw = 2.5 / u_resolution;
+    hp = prev.rgb - 0.25 * (texture(u_prevFrame, fract(fbUV + gw)).rgb + texture(u_prevFrame, fract(fbUV - gw)).rgb
+      + texture(u_prevFrame, fract(fbUV + vec2(gw.x, -gw.y))).rgb + texture(u_prevFrame, fract(fbUV + vec2(-gw.x, gw.y))).rgb);
+  }
   prev.rgb = u_hueDrift != 0.0 ? hueRotate(prev.rgb, u_hueDrift) : clamp(prev.rgb, 0.0, 1.0);
+  if (u_gOn > 0.5) {
+    float gl0 = dot(prev.rgb, vec3(0.299, 0.587, 0.114));
+    prev.rgb = mix(vec3(gl0), prev.rgb, u_gSat);
+    prev.rgb = (prev.rgb - 0.5) * u_gGain + 0.5 + u_gOffset;
+    prev.rgb = mix(prev.rgb, vec3(mix(gl0, 0.5, 0.5)), u_gPull);
+    // Sharpen: unsharp mask, mixed with a difference blend of the image against its blur (|high-pass|: the edges).
+    if (u_gSharp > 0.0) prev.rgb = mix(prev.rgb, mix(prev.rgb + hp * 1.5, abs(hp) * 3.0, 0.12), u_gSharp);
+    prev.rgb = clamp(prev.rgb, 0.0, 1.0);
+  }
 
   // Chromakey: pixels of the fresh layer mix close to the key color are
   // replaced with the feedback-read color instead, so a keyed color
@@ -2241,7 +2305,8 @@ var FEEDBACK_UNIFORMS = [
   'u_noiseScale', 'u_camera', 'u_cameraAspect', 'u_cameraOn', 'u_cameraMirror',
   'u_hue', 'u_saturate', 'u_brightness', 'u_contrast', 'u_eqBand', 'u_eqOn',
   'u_chromakeyEnabled', 'u_chromakeyColor', 'u_chromakeyThreshold', 'u_chromakeySoftness',
-  'u_blendMode', 'u_modulateAmount', 'u_delayFrame', 'u_delayMix', 'u_diffuse', 'u_dither', 'u_frameSeed', 'u_cameraPrev', 'u_camMix'
+  'u_blendMode', 'u_modulateAmount', 'u_delayFrame', 'u_delayMix', 'u_diffuse', 'u_dither', 'u_frameSeed', 'u_cameraPrev', 'u_camMix',
+  'u_gOn', 'u_gSat', 'u_gGain', 'u_gOffset', 'u_gPull', 'u_gSharp'
 ];
 var feedbackProgram, displayProgram, feedbackUniforms, displayUniforms;
 function linkPrograms() {
@@ -2391,12 +2456,88 @@ function uploadFeedbackUniforms(t, p) {
 
 var lastWritten = buffers[0];
 
+// Runaway guard: keeps the loop from running away to a saturated, white, black or flat field. Every few frames a
+// proxy of the field (the image drawn into a grid about 18 x 32, read back without stalling: a pixel-buffer read and a
+// fence, collected frames later) gives its brightness mean and spread, mean saturation (chroma) and the shares near
+// white and near black. Excess scores (0-1) for each failure drive the strategy's corrections, eased in and out:
+function guardReset() {
+  guard.stats = null; guard.ex = null; guard.T = null; guard.sat = 1; guard.gain = 1; guard.offset = 0; guard.sharp = 0; guard.fb = 1; guard.act = 0;
+  guard.pull = (params.guardMode | 0) === 1 ? 0.025 : 0;
+}
+function guardTip() {
+  var m = params.guardMode | 0, g = guard.stats, t = 'Guard: ' + GUARD[m].name + (m > 1 && guard.ex ? '  acting ' + Math.round(guard.act * 100) + '%' : '');
+  if (g && m > 1) t += '\nbright ' + g.mean.toFixed(2) + ' \u00b1' + g.sd.toFixed(2) + '  sat ' + g.sat.toFixed(2) + '\nwhite ' + Math.round(g.white * 100) + '%  black ' + Math.round(g.black * 100) + '%';
+  return t;
+}
+// Called each feedback pass: collect a finished read, then (every GUARD_EVERY frames) start the next.
+function guardStep(measureNow) {
+  var m = params.guardMode | 0;
+  if (m < 2) return;
+  if (guard.fence) {
+    var st = gl.clientWaitSync(guard.fence, 0, 0);
+    if (st === gl.ALREADY_SIGNALED || st === gl.CONDITION_SATISFIED) {
+      gl.deleteSync(guard.fence); guard.fence = null;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, guard.pbo); gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, guard.px); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      guardStats();
+    }
+  }
+  if (!measureNow || guard.fence || ++guard.n % GUARD_EVERY) return;
+  var w = Math.max(4, Math.round(CW / 40)), h = Math.max(4, Math.round(CH / 40));
+  if (!guard.fbo || guard.w !== w || guard.h !== h) {
+    if (guard.fbo) { gl.deleteFramebuffer(guard.fbo.fbo); gl.deleteTexture(guard.fbo.tex); }
+    guard.fbo = createFBO(w, h, true); guard.w = w; guard.h = h; guard.px = new Uint8Array(w * h * 4);
+    guard.pbo = guard.pbo || gl.createBuffer();
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, guard.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER, w * h * 4, gl.STREAM_READ); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, guard.fbo.fbo); gl.viewport(0, 0, w, h);
+  gl.useProgram(displayProgram);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, lastWritten.tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, lastWritten.tex);
+  gl.uniform1i(displayUniforms.u_frame, 0); gl.uniform1i(displayUniforms.u_prev, 1); gl.uniform1f(displayUniforms.u_avg, 0); gl.uniform1f(displayUniforms.u_outDither, 0);
+  drawFullscreenTriangle();
+  if (GUARD_SYNC) { gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, guard.px); guardStats(); }
+  else {
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, guard.pbo); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0); gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    guard.fence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, CW, CH);
+}
+function guardEase() { var T = guard.T; if (T) ['sat', 'gain', 'offset', 'sharp', 'fb'].forEach(function (k) { guard[k] += (T[k] - guard[k]) * 0.08; }); }
+// The proxy's statistics, the excess scores, and the strategy's corrections.
+function guardStats() {
+  var px = guard.px, n = px.length / 4, sl = 0, sl2 = 0, ss = 0, wh = 0, bk = 0;
+  for (var i = 0; i < px.length; i += 4) {
+    var r = px[i] / 255, g = px[i + 1] / 255, b = px[i + 2] / 255, l = 0.299 * r + 0.587 * g + 0.114 * b;
+    sl += l; sl2 += l * l; ss += Math.max(r, g, b) - Math.min(r, g, b); if (l > 0.9) wh++; if (l < 0.06) bk++;
+  }
+  var mean = sl / n, st = guard.stats = { mean: mean, sd: Math.sqrt(Math.max(0, sl2 / n - mean * mean)), sat: ss / n, white: wh / n, black: bk / n };
+  var c = function (v) { return clamp(v, 0, 1); };
+  // Triggers sit past the healthy look (the default field: saturation ~0.83, spread ~0.06, no white or black), at its
+  // runaway forms: everything saturated, white or black, or the spread collapsing to a flat field.
+  var ex = guard.ex = { sat: c((st.sat - 0.9) / 0.08), white: c((st.white - 0.25) / 0.45), black: c((st.black - 0.4) / 0.45), flat: c((0.03 - st.sd) / 0.025) };
+  var m = params.guardMode | 0, T = { sat: 1, gain: 1, offset: 0, sharp: 0, fb: 1 };
+  // Auto: scale the saturation and levels of last frame's image by the inverse of the Saturation and Contrast knobs (so
+  // their compounding stops) as far as the field runs away, plus a little more towards grey, and lift or lower it.
+  var lvl = Math.max(ex.white, ex.black, ex.flat);
+  if (m === 2 || m === 6) { T.sat = Math.pow(1 / params.saturate, ex.sat) * (1 - 0.08 * ex.sat); T.gain = Math.pow(1 / params.contrast, lvl) * (1 - 0.06 * lvl); T.offset = 0.02 * (ex.black - ex.white); }
+  else if (m === 3) {   // back into a comfortable band (no correction inside it): saturation 0.25-0.9, brightness 0.2-0.75, spread 0.06 up
+    var band = function (v, lo, hi) { return v < lo ? lo - v : v > hi ? hi - v : 0; };
+    T.sat = clamp(1 + band(st.sat, 0.25, 0.9) * 2, 0.75, 1.05); T.gain = clamp(1 + band(st.sd, 0.06, 9) * 1.5, 1, 1.06); T.offset = clamp(band(st.mean, 0.2, 0.75) * 0.1, -0.03, 0.03);
+  }
+  if (m === 4 || m === 6) T.fb = 1 - 0.45 * Math.max(ex.sat, ex.white, ex.black, ex.flat);
+  if (m === 5) T.sharp = 0.45 * Math.max(ex.flat, ex.white);   // detail only helps a flat or white field, and fights the diffusion elsewhere
+  guard.T = T;   // eased towards a little every frame (guardEase), so a correction never steps
+  guard.act = m === 3 ? c(Math.max(Math.abs(guard.sat - 1) / 0.25, Math.abs(guard.gain - 1) / 0.06, Math.abs(guard.offset) / 0.03)) : c(Math.max(ex.sat, ex.white, ex.black, ex.flat));
+}
+
 var frameCount = 0;
 function renderFeedbackPass(t) {
   // The loop always reads the most recently completed frame; Delay mixes in a second tap from `delay` frames further
   // back. (Reading only the old frame split the image into delay + 1 loops interleaved frame by frame, which strobed.)
   // The ring always holds at least delay+2 slots, so neither read can land on the slot being written.
   var p = liveParams(t), delay = Math.round(p.delay);
+  if (guard.mode !== (params.guardMode | 0)) { guard.mode = params.guardMode | 0; guardReset(); }   // a new strategy, or one recalled with a preset
+  guardStep(false); guardEase();
   ensureHistory(delay);
   var n = buffers.length, writeIndex = ringWriteIndex;
   var write = buffers[writeIndex], read = buffers[wrapIndex(writeIndex - 1, n)], tap = buffers[wrapIndex(writeIndex - 1 - delay, n)];
@@ -2414,9 +2555,16 @@ function renderFeedbackPass(t) {
   uploadFeedbackUniforms(t, p);
   gl.uniform1f(feedbackUniforms.u_delayMix, delay > 0 ? 0.5 : 0);
   gl.uniform1f(feedbackUniforms.u_frameSeed, (frameCount++ % 997) * 13.7);
+  var gm = params.guardMode | 0, fu = feedbackUniforms;
+  var neutral = Math.abs(guard.sat - 1) < 1e-4 && Math.abs(guard.gain - 1) < 1e-4 && Math.abs(guard.offset) < 1e-5 && !guard.pull && guard.sharp < 1e-4;
+  gl.uniform1f(fu.u_gOn, gm && !neutral ? 1 : 0);   // skipped while it would change nothing (exact, and cheaper)
+  gl.uniform1f(fu.u_gSat, guard.sat); gl.uniform1f(fu.u_gGain, guard.gain); gl.uniform1f(fu.u_gOffset, guard.offset);
+  gl.uniform1f(fu.u_gPull, guard.pull); gl.uniform1f(fu.u_gSharp, gm === 5 ? guard.sharp : 0);
+  if (guard.fb < 0.9999 && (gm === 4 || gm === 6)) gl.uniform1f(fu.u_feedback, p.feedback * guard.fb);
   drawFullscreenTriangle();
   lastWritten = write;
   ringWriteIndex = wrapIndex(ringWriteIndex + 1, n);
+  guardStep(true);
 }
 
 function renderDisplayPass() {
@@ -2458,7 +2606,7 @@ function frame(now) {
     updateCameraTexture();
     renderFeedbackPass(simTime);
     renderDisplayPass();
-    lfoUi();
+    lfoUi(); guardUi();
   } else if (rec) renderDisplayPass();   // a recording keeps running through a freeze, holding the frozen image
   if (rec) rec.capture();
 }
@@ -2469,6 +2617,7 @@ canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); c
 canvas.addEventListener('webglcontextrestored', function () {
   linkPrograms();
   FB_FLOAT = detectFloatBuffers();
+  guard.fbo = null; guard.pbo = null; guard.fence = null;
   buffers = createRingBuffers(2);
   clearScreen();
   cameraTexture = createCameraTexture(); cameraPrevTexture = createCameraTexture();

@@ -1020,3 +1020,53 @@ Tried and not kept:
   A knee that eases into 0 sits above the identity line, so blacks drift up (mean 54 → 67).
 - **Centring Modulate's offset on zero**: it cut default flicker to 1.05, but it took out the marbling, the look's main
   texture (motion 5.8 → 1.3, large flat bands). The one-sided offset stays.
+
+## 30. Runaway guard (experimental, 2026-10-24)
+A **Guard** key in the Color window (fifth item; saved with presets as `guardMode`) cycles through strategies that keep
+the loop from running away to a saturated, white, black or flat field. Off is the default. The key's text glows while
+the guard is acting; its tooltip shows the strategy, how hard it is acting, and the measured field.
+
+**Measuring (an efficient proxy).** Every 4 frames the display shader draws the field into an 18 x 32 RGBA8 target
+(`guard.fbo`). The read-back uses a pixel buffer and a fence, collected on a later frame, so the GPU never stalls. From
+those 576 samples come brightness mean and spread, mean saturation (chroma), and the shares near white (L > 0.9) and
+near black (L < 0.06). Excess scores (0–1) trigger past the healthy look (the default field: saturation ~0.83, spread
+~0.06): saturation above 0.9, white above 25%, black above 40%, spread below 0.03. The corrections ease towards their
+targets by 8% every frame, so nothing steps. The guard pass in the shader is skipped when every correction is neutral.
+
+**Strategies** (`GUARD`; in the shader they act on last frame's image before the blend):
+- **Dull**: every recursion eases 2.5% towards grey. No measuring.
+- **Auto**: while the field runs away, scales last frame's saturation and levels by the inverse of the Saturation and
+  Contrast knobs, so their compounding stops, plus a little more towards grey; lifts or lowers it.
+- **AGC**: automatic levels, like a camera's gain control. Brings saturation (0.25–0.9), brightness (0.2–0.75) and
+  spread (≥ 0.06) back into a band and leaves them alone inside it.
+- **Breathe**: shortens Persistence by up to 45% while the field runs away, so the layers refill it.
+- **Sharpen**: an unsharp mask plus a difference blend of the image against a 2.5 px blur (four extra taps, only while
+  acting), triggered by a flat or white field.
+- **Hybrid**: Auto and Breathe together.
+
+**Results** (headless, 720 x 1280; 300 frames, then 60 measured. "Healthy" is the share of frames with spread > 0.03,
+white and black < 50%, saturation < 0.95. White/black is the share of pixels; flicker uses the meter from §29).
+Off runs away in every scenario except Default.
+
+| scenario | Off | Dull | Auto | AGC | Breathe | Sharpen | Hybrid |
+|---|---|---|---|---|---|---|---|
+| Default (healthy %) | 47 | 85 | 85 | 100 | 98 | 100 | 100 |
+| Add, Persistence 0.97: white % | 100 | 100 | 94 | 100 | 53 | 95 | 52 |
+| Contrast 1.1 + Sat 4/3: healthy % | 0 (black) | 0 (flat colour) | 0 | 0 | 100 | 0 | 87 |
+| Saturation 4/3: healthy % | 0 | 0 | 0 | 0 | 73 | 0 | 100 |
+| Darken, Persistence 0.99: healthy % | 0 | 0 | 0 | 0 | 50 | 0 | 57 |
+| Mult, Persistence 0.99: healthy % | 0 | 0 | 0 | 0 | 32 | 0 | 52 |
+| Default flicker | 1.6 | 2.2 | 2.9 | 3.3 | 3.3 | 5.5 | 3.3 |
+
+Findings:
+- **Breathe** is the most dependable and the calmest: letting the fresh layers re-seed the field beats fighting the
+  loop's own gain.
+- **Hybrid** covers oversaturation fully, but flickers more (5.1) while pulling back from a blackout.
+- **Dull** and **AGC** can't win against strong in-loop Contrast or Saturation (+10–33% a frame); they only tidy a
+  healthy field.
+- **Sharpen** amplifies the high frequencies that make up flicker and fights the diffusion. It barely dents a whiteout
+  and adds flicker even on the default image; kept for comparison only.
+- Every active strategy adds some flicker to the default image, because it keeps the field moving.
+
+Cost: about 0.30–0.34 ms per frame for all strategies on a GTX 1070, within noise of Off; the proxy read is ~2 KB every
+4 frames.
