@@ -279,9 +279,6 @@ var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSp
 // window looks: see buildColorsEq.
 var EQ_N = 7, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta'], EQ_HUES = [0, 30, 60, 120, 180, 240, 300];
 var EQ_STYLES = ['Console', 'Spectrum', 'Rainbow', 'Wheel', 'Encoders', 'Keys', 'Dots', 'Dials', 'Bloom', 'Levels', 'Pads', 'Seven'], eqStyle = 0, eqSel = 0;
-// Modulation window layouts (localStorage 'vfv-mod-style'): see buildLfo.
-var LFO_STYLES = ['Rows', 'Columns', 'Grid', 'Matrix'], lfoStyle = 0;
-try { lfoStyle = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vfv-mod-style'), 10) || 0)); } catch (e) { /* Rows */ }
 try { eqStyle = Math.max(0, Math.min(EQ_STYLES.length - 1, parseInt(localStorage.getItem('vfv-eq-style'), 10) || 0)); } catch (e) { /* Console */ }
 var EQ_WIDTH = { min: 6, max: 120, def: 22, zero: 22, log: true, step: 0.5, f: function (v) { return '±' + Math.round(v) + '°'; } };
 for (q = 0; q < EQ_N; q++) { PD['eqH' + q] = { min: 0, max: 360, def: EQ_HUES[q], zero: EQ_HUES[q], step: 1, f: deg }; PD['eqW' + q] = EQ_WIDTH; }
@@ -1050,7 +1047,9 @@ function eqWheel(C) {
 // Styles 5-12, after the Teenage Engineering OP-1: black screens drawn in thin vector lines, flat grey keys and pads,
 // and coloured endless encoders matched by colour to the values on screen: blue steps the selected band, green turns
 // its gain, white its hue and orange its width.
-// 5 Encoders: a screen of seven level bars (each band's bell drawn under its bar) and all four encoders.
+// 5 Encoders: seven faders filling the window and nothing else; every band keeps the fixed default width. Each column
+//   fills from the bottom to its level: below the middle (1x) in the band's colour, greying towards the bottom, and
+//   white from the middle up.
 // 6 Keys: flat grey keys, one per band with its level lit up the key (drag a key for gain), a curve screen and the
 //   white and orange encoders.
 // 7 Dots: a dot-matrix screen, eight dots per band (0.25 to 2x; the colour square below them is 0); tap or sweep
@@ -1187,30 +1186,38 @@ function opSplit(C, side) {
 function opSelLast() { var o = []; for (var i = 0; i < EQ_N; i++) if (i !== eqSel) o.push(i); o.push(eqSel); return o; }
 function opValText() { return EQ_NAMES.map(function (n, j) { return n + ' ' + params['eqG' + j].toFixed(2) + 'x at ' + Math.round(params['eqH' + j]) + '°'; }).join(', '); }
 
-// Style 5: level bars and the four encoders.
+// Style 5: full-height faders, one column per band, each column a slider (tap or drag for the level, double-click 1x,
+// the wheel or arrow keys nudge). The bands' widths are fixed: building the style sets each to the default.
 function eqOpEncoders(C) {
-  var wide = C[2] >= C[3], S = opSplit(C, wide ? Math.min(C[3] * 1.05, C[2] * 0.3) : Math.min(C[2] * 1.05, C[3] * 0.36));
-  opEncs(S[1], ['band', 'gain', 'hue', 'width']);
-  var E = opScreen(S[0], 'Colors EQ levels: tap a band to pick it, drag for its saturation; the blue, green, white and orange encoders turn its band, gain, hue and width');
-  var w = E.w, h = E.h, fs = 18 * UL, pad = 14 * UK, top = pad * 2 + fs, bellH = Math.min(h * 0.14, 40 * UK), bot = h - pad * 1.6 - bellH, cw = (w - 2 * pad) / EQ_N;
-  var yOf = function (g) { return bot - g / 2 * (bot - top); }, col = function (p) { return clamp(Math.floor((p[0] - pad) / cw), 0, EQ_N - 1); }, held = 0;
+  var g = 6 * UK, cw = (C[2] - (EQ_N - 1) * g) / EQ_N;
+  for (var i = 0; i < EQ_N; i++) { params['eqW' + i] = EQ_WIDTH.def; opColumn(C[0] + i * (cw + g), C[1], cw, C[3], i); }
+}
+function opColumn(x, y, w, h, i) {
+  var t = el('div', at(x, y, w, h) + ';border-radius:' + 5 * UK + 'px;overflow:hidden;cursor:ns-resize;touch-action:none;background:#0b0b0d;' +
+    'box-shadow:inset 0 2px 5px rgba(0,0,0,0.9),0 1px 0 rgba(255,255,255,0.12)');
+  t.setAttribute('role', 'slider'); t.tabIndex = 0; t.setAttribute('aria-label', EQ_NAMES[i] + ' saturation');
+  var low = el('div', 'position:absolute;left:0;right:0;bottom:0;pointer-events:none', t), high = el('div', 'position:absolute;left:0;right:0;bottom:50%;background:#f4f4f2;pointer-events:none', t);
+  el('div', 'position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:rgba(128,128,132,0.55);pointer-events:none', t);
   ui.eqParts.push(function () {
-    var c = E.x; c.clearRect(0, 0, w, h);
-    opStatus(c, pad, pad + fs / 2, fs, w - 2 * pad, ['band', 'gain', 'hue', 'width']);
-    c.strokeStyle = OP.dim; c.lineWidth = 2; c.setLineDash([4, 6]); c.beginPath(); c.moveTo(pad, yOf(1)); c.lineTo(w - pad, yOf(1)); c.stroke(); c.setLineDash([]);
-    for (var i = 0; i < EQ_N; i++) {
-      var cx = pad + cw * (i + 0.5), bw = cw * 0.42, g = params['eqG' + i], hue = eqHueCss(i), sel = i === eqSel;
-      c.strokeStyle = sel ? OP.white : OP.dim; c.lineWidth = sel ? 3 : 2; c.strokeRect(cx - bw / 2, top, bw, bot - top);
-      c.fillStyle = hue; c.fillRect(cx - bw / 2 + 5, yOf(g), bw - 10, bot - yOf(g));
-      c.fillStyle = OP.white; c.fillRect(cx - bw / 2 - 5, yOf(g) - 2, bw + 10, 4);
-      var sd = params['eqW' + i] / (360 / EQ_N) * cw, by = h - pad;   // the bell, to the scale of the band's share of the hue circle
-      c.beginPath();
-      for (var k = 0; k <= 40; k++) { var dx = (k / 40 - 0.5) * cw * 0.9; c[k ? 'lineTo' : 'moveTo'](cx + dx, by - bellH * Math.exp(-0.5 * (dx / sd) * (dx / sd))); }
-      c.strokeStyle = hue; c.lineWidth = sel ? 3 : 2; c.stroke();
-    }
-    E.g.setAttribute('aria-valuetext', opValText());
+    var v = params['eqG' + i], k = Math.min(v, 1), hu = Math.round(params['eqH' + i]);
+    low.style.height = k * 50 + '%'; low.style.background = 'hsl(' + hu + ',' + Math.round(90 * k) + '%,' + Math.round(50 + 6 * k) + '%)';
+    high.style.height = Math.max(0, v - 1) * 50 + '%';
+    t.setAttribute('aria-valuetext', v.toFixed(2) + '×');
   });
-  opTouch(E.g, w, h, function (p, first) { if (first) { held = col(p); eqSelect(held); } eqSetGain(held, (bot - p[1]) / (bot - top) * 2); return held; }, col);
+  var setFrom = function (e) { var r = t.getBoundingClientRect(); eqSetGain(i, (1 - (e.clientY - r.top) / r.height) * 2); eqRefresh(); eqTip(t, i); };
+  t.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    e.preventDefault(); t.setPointerCapture(e.pointerId); dragging = true;
+    if (eqSel !== i) eqSelect(i);
+    setFrom(e);
+    var up = function () { dragging = false; hideTip(); t.removeEventListener('pointermove', setFrom); t.removeEventListener('pointerup', up); t.removeEventListener('pointercancel', up); };
+    t.addEventListener('pointermove', setFrom); t.addEventListener('pointerup', up); t.addEventListener('pointercancel', up);
+  });
+  var nudge = function (d) { opGain(i, d); eqRefresh(); eqTip(t, i); };
+  t.addEventListener('dblclick', function () { params['eqG' + i] = 1; eqRefresh(); eqTip(t, i); });
+  t.addEventListener('wheel', function (e) { e.preventDefault(); nudge(e.deltaY > 0 ? -0.05 : 0.05); }, { passive: false });
+  t.addEventListener('keydown', function (e) { var d = { ArrowUp: 0.05, ArrowRight: 0.05, ArrowDown: -0.05, ArrowLeft: -0.05 }[e.key]; if (d) { e.preventDefault(); nudge(d); } });
+  t.addEventListener('pointerleave', function () { if (!dragging) hideTip(); });
 }
 
 // A flat grey key for band i in rectangle R: upright (level up the key) in a wide window, lying (level to the right)
@@ -1560,64 +1567,27 @@ function opSevenEnc(cx, cy, d, i) {
 
 // Modulation window (Advanced page): four LFO channels, each with a Wave screen (tap it to step through Sine, Tri,
 // Saw, Square and S&H; the wheel and arrow keys step too) showing the wave and where the LFO is in its cycle, Speed and
-// Depth knobs, and a Target key naming the knob it drives (tap it to pick one on the Main page, pickLfo). Keys 1-4 on
-// the window's edge pick how the channels are laid out (lfoStyle):
-// 1 Rows: one channel per row, Wave, Speed, Depth and Target left to right (Target under Wave when the row is narrow).
-// 2 Columns: one channel per column, Wave, Speed, Depth and Target top to bottom.
-// 3 Grid: the channels as 2 x 2 tiles, Wave over the two knobs over Target (wide tiles: Wave and Target left, knobs
-//   right).
-// 4 Matrix: a table with one row per feature, labelled Wave / Speed / Depth / Target, and one column per channel (in a
-//   wide window turned: a column per feature under a header, a row per channel); the knobs drop their own labels.
+// Depth knobs, and a Target key naming the knob it drives (tap it to pick one on the Main page, pickLfo). The channels
+// sit as 2 x 2 tiles (the Grid layout, chosen from four), each Wave over the two knobs over Target (a wide tile: Wave
+// and Target on the left, the knobs on the right).
 function buildLfo(b, m) {
   secBox(b, 'Modulation', 'chroma');
   ui.lfoWave = []; ui.lfoTarget = [];
-  var fk = frameKeys(b, m, 'Modulation', LFO_STYLES, lfoStyle, function (i) { pickStyle('vfv-mod-style', i, LFO_STYLES, function (v) { lfoStyle = v; }, function () { return ui.lfoKeys; }); });
-  ui.lfoKeys = fk.keys;
-  var C = [b[0] + m, fk.top, b[2] - 2 * m, b[1] + b[3] - m - fk.top], g = 10 * UK, i;
-  for (i = 0; i < LFO_N; i++) {
-    if (lfoStyle === 0) { var rh = (C[3] - 3 * g) / LFO_N; lfoCell(i, [C[0], C[1] + i * (rh + g), C[2], rh], 'row'); }
-    else if (lfoStyle === 1) { var cw = (C[2] - 3 * g) / LFO_N; lfoCell(i, [C[0] + i * (cw + g), C[1], cw, C[3]], 'col'); }
-    else if (lfoStyle === 2) { var tw = (C[2] - g) / 2, th = (C[3] - g) / 2; lfoCell(i, [C[0] + (i % 2) * (tw + g), C[1] + Math.floor(i / 2) * (th + g), tw, th], 'tile'); }
-  }
-  if (lfoStyle === 3) lfoMatrix(C);
+  var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = 10 * UK, tw = (C[2] - g) / 2, th = (C[3] - g) / 2;
+  for (var i = 0; i < LFO_N; i++) lfoCell(i, [C[0] + (i % 2) * (tw + g), C[1] + Math.floor(i / 2) * (th + g), tw, th]);
   syncers.push(syncLfo); syncLfo();
 }
-// Size of a Speed or Depth knob whose ring fits wRoom across and whose ring and label (none when bare) fit hRoom down.
-function lfoKnobSize(wRoom, hRoom, bare) { var lab = bare ? 0 : 10 * UL + 3; return Math.max(16, Math.min(42 * UK, wRoom - 20, hRoom - 20 - lab)); }
-function lfoKnob(i, which, x, y, ks, bare) {
-  var id = 'lfo' + i + which;
-  makeItem(id, x, y, ks, { fam: 'chroma' });
-  if (bare) ui.knobs[id].ring.parentNode.lastChild.style.display = 'none';
-}
-// One channel in the box r = [x, y, w, h], laid out as 'row', 'col' or 'tile' (see buildLfo), on a faint plate.
-function lfoCell(i, r, mode) {
+// Size of a Speed or Depth knob whose ring fits wRoom across and whose ring and label fit hRoom down.
+function lfoKnobSize(wRoom, hRoom) { return Math.max(16, Math.min(42 * UK, wRoom - 20, hRoom - 20 - (10 * UL + 3))); }
+function lfoKnob(i, which, x, y, ks) { makeItem('lfo' + i + which, x, y, ks, { fam: 'chroma' }); }
+// One channel's tile in the box r = [x, y, w, h], on a faint plate.
+function lfoCell(i, r) {
   el('div', at(r[0], r[1], r[2], r[3]) + ';box-sizing:border-box;border-radius:5px;background:rgba(0,0,0,0.07);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.13);pointer-events:none');
-  var p = 6 * UK, g = 8 * UK, kh = 28 * UK, lab = 10 * UL + 3, x = r[0] + p, y = r[1] + p, w = r[2] - 2 * p, h = r[3] - 2 * p, ks, R, ew, waveW, waveH;
-  if (mode === 'row') {
-    ks = lfoKnobSize(1e9, h, false); R = ks / 2 + 10; ew = Math.max(2 * R, textW('Speed', 10 * UL, 700, 0.1));
-    var cy = y + (h - lab) / 2, tw = Math.max(90 * UK, w * 0.26);
-    waveW = Math.min(w * 0.3, Math.max(70 * UK, h * 1.3));
-    if (waveW + 2 * ew + tw + 3 * g <= w) {   // Wave | Speed | Depth | Target
-      var xs = spread(x, x + w, [waveW, ew, ew, tw]);
-      makeLfoWave(i, xs[0], y, waveW, h);
-      lfoKnob(i, 'Rate', xs[1] + ew / 2, cy, ks); lfoKnob(i, 'Depth', xs[2] + ew / 2, cy, ks);
-      makeLfoTarget(i, xs[3], y + (h - kh) / 2, tw, kh);
-    } else {   // Wave over Target | Speed | Depth
-      waveW = w - 2 * ew - 2 * g; var xs2 = spread(x, x + w, [waveW, ew, ew]);
-      makeLfoWave(i, x, y, waveW, h - kh - g);
-      makeLfoTarget(i, x, y + h - kh, waveW, kh);
-      lfoKnob(i, 'Rate', xs2[1] + ew / 2, cy, ks); lfoKnob(i, 'Depth', xs2[2] + ew / 2, cy, ks);
-    }
-  } else if (mode === 'col') {
-    waveH = Math.min(w * 0.9, h * 0.2);
-    ks = lfoKnobSize(w, (h - waveH - kh - 3 * g) / 2, false); R = ks / 2 + 10;
-    var ys = spread(y, y + h, [waveH, 2 * R + lab, 2 * R + lab, kh]);
-    makeLfoWave(i, x, ys[0], w, waveH);
-    lfoKnob(i, 'Rate', x + w / 2, ys[1] + R, ks); lfoKnob(i, 'Depth', x + w / 2, ys[2] + R, ks);
-    makeLfoTarget(i, x, ys[3], w, kh);
-  } else if (w > 1.6 * h) {   // wide tile: Wave over Target on the left, the knobs side by side on the right
+  var p = 6 * UK, g = 8 * UK, kh = 28 * UK, lab = 10 * UL + 3, x = r[0] + p, y = r[1] + p, w = r[2] - 2 * p, h = r[3] - 2 * p;
+  var ks, R, ew, waveH;
+  if (w > 1.6 * h) {   // wide tile: Wave over Target on the left, the knobs side by side on the right
     var lw = w * 0.46, rw = w - lw - g;
-    ks = lfoKnobSize(rw / 2, h, false); R = ks / 2 + 10;
+    ks = lfoKnobSize(rw / 2, h); R = ks / 2 + 10;
     makeLfoWave(i, x, y, lw, h - kh - g);
     makeLfoTarget(i, x, y + h - kh, lw, kh);
     var kx = spread(x + lw + g, x + w, [2 * R, 2 * R]), ky = y + (h - lab) / 2;
@@ -1625,38 +1595,11 @@ function lfoCell(i, r, mode) {
   } else {   // tile: Wave over the knobs over Target
     waveH = Math.min(h * 0.32, w * 0.6);
     ew = textW('Speed', 10 * UL, 700, 0.1) + 6 * UK;
-    ks = lfoKnobSize(Math.min(w / 2, ew + 20), h - waveH - kh - 2 * g, false); R = ks / 2 + 10; ew = Math.max(ew, 2 * R);
+    ks = lfoKnobSize(Math.min(w / 2, ew + 20), h - waveH - kh - 2 * g); R = ks / 2 + 10; ew = Math.max(ew, 2 * R);
     var ty = spread(y, y + h, [waveH, 2 * R + lab, kh]), kx2 = spread(x, x + w, [ew, ew]);
     makeLfoWave(i, x, ty[0], w, waveH);
     lfoKnob(i, 'Rate', kx2[0] + ew / 2, ty[1] + R, ks); lfoKnob(i, 'Depth', kx2[1] + ew / 2, ty[1] + R, ks);
     makeLfoTarget(i, x, ty[2], w, kh);
-  }
-}
-// Style 4: the table. Labels are knob-label so the Style Lab colours them.
-function lfoMatrix(C) {
-  var kh = 28 * UK, g = 8 * UK, names = ['Wave', 'Speed', 'Depth', 'Target'], i;
-  var label = function (t, cx, cy, w) { var l = cl(cx, cy - 5 * UL, w, t, LABEL()); l.className = 'knob-label'; l.dataset.fam = 'chroma'; };
-  if (C[3] > C[2]) {   // a row per feature, a column per channel
-    var lw = textW('Target', 10 * UL, 700, 0.1) + 12 * UK, cw = (C[2] - lw - 3 * g) / LFO_N, ks = lfoKnobSize(cw, 42 * UK + 20, true), ring = ks + 20;
-    var waveH = Math.min(cw * 0.9, C[3] * 0.22), ys = spread(C[1], C[1] + C[3], [waveH, ring, ring, kh]), mid = [waveH, ring, ring, kh].map(function (v, k) { return ys[k] + v / 2; });
-    names.forEach(function (n, k) { label(n, C[0] + lw / 2, mid[k], lw); });
-    for (i = 0; i < LFO_N; i++) {
-      var x = C[0] + lw + i * (cw + g);
-      makeLfoWave(i, x, ys[0], cw, waveH);
-      lfoKnob(i, 'Rate', x + cw / 2, mid[1], ks, true); lfoKnob(i, 'Depth', x + cw / 2, mid[2], ks, true);
-      makeLfoTarget(i, x, ys[3], cw, kh);
-    }
-  } else {   // a column per feature under a header, a row per channel
-    var hh = 12 * UL, rh = (C[3] - hh - g - 3 * g) / LFO_N, ks2 = lfoKnobSize(rh, rh, true), ring2 = ks2 + 20;
-    var waveW = Math.min(rh * 2, C[2] * 0.3), tw = Math.max(90 * UK, (C[2] - waveW - 2 * ring2) * 0.45);
-    var xs = spread(C[0], C[0] + C[2], [waveW, ring2, ring2, tw]), widths = [waveW, ring2, ring2, tw];
-    names.forEach(function (n, k) { label(n, xs[k] + widths[k] / 2, C[1] + hh / 2, Math.max(widths[k], 60 * UL)); });
-    for (i = 0; i < LFO_N; i++) {
-      var y = C[1] + hh + g + i * (rh + g), cy = y + rh / 2;
-      makeLfoWave(i, xs[0], y, waveW, rh);
-      lfoKnob(i, 'Rate', xs[1] + ring2 / 2, cy, ks2, true); lfoKnob(i, 'Depth', xs[2] + ring2 / 2, cy, ks2, true);
-      makeLfoTarget(i, xs[3], cy - kh / 2, tw, kh);
-    }
   }
 }
 function makeLfoWave(i, x, y, w, h) {

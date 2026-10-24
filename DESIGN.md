@@ -971,3 +971,16 @@ console errors.
 Brightness now spans ±1/30 (was ±1/3) and Contrast 0.9–1.1× (was 0–2×), with finer steps (0.0005) so both stay
 smooth rather than stepped. The default contrast (1.03×) is unchanged. Recalling a preset clamps every numeric value into its
 knob's current range, so presets saved with the old wide values land at the ends of the new ones.
+
+## 28. Modulation fixed to Grid; Colors EQ style 5 as full-window faders (2026-10-24)
+Modulation now always uses the Grid layout (2 x 2 tiles: Wave over Speed and Depth over Target; wide tiles put Wave
+and Target on the left). Its style keys and the Rows, Columns and Matrix layouts are gone (`lfoMatrix`, the row and
+column cell modes, `LFO_STYLES` and the `vfv-mod-style` key; recoverable from git at b921382).
+Colors EQ style 5 (still named Encoders) is now seven equal columns filling the window and nothing else: no screen,
+encoders or status line. Each column is a slider (tap or drag for the level; double-click returns 1x; the wheel and
+arrow keys nudge). Building the style sets every band to the fixed default width (±22°). A column fills from the bottom
+to its level. Below the middle line (1x) the fill is the band's colour, desaturating towards grey as the level drops
+towards 0. Above the middle the fill is white.
+Tested in headless Chrome at 900 x 1340 and 1340 x 910: Modulation builds 4 waves, 8 knobs and 4 targets with no
+overlaps; the EQ builds 7 equal columns (108 px / 26 px wide); fills check out (1.6x: colour half plus 30% white;
+0.4x: 20% greyed; 0x: empty); no errors.
