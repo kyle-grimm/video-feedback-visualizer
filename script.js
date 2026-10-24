@@ -353,8 +353,9 @@ var SECTIONS = {
 var LFO_TARGETS = {};
 Object.keys(SECTIONS).forEach(function (f) { SECTIONS[f].items.forEach(function (id) { if (PD[id]) LFO_TARGETS[id] = 1; }); });
 // The Mod page (internally 'adv'; experimental): the Colors hue EQ along the whole bottom; above it on the right, the
-// Modulation window (four LFOs over their four target keys, in the green Chromakey family colours) and the Mix window
-// (the XY pad, in the purple Transform family colours). The header key naming the other page switches; the choice is kept. pickLfo >= 0 while the Main page is open to pick that LFO's target.
+// Modulation window (four LFOs over their four target keys, in the red Feedback family colours) and the Mix window (the
+// XY pad, in the green Chromakey family colours). The header key naming the other page switches; the choice is kept.
+// pickLfo >= 0 while the Main page is open to pick that LFO's target.
 var page = 'main';
 try { if (localStorage.getItem('vfv-page') === 'adv') page = 'adv'; } catch (e) { /* main */ }
 var pickLfo = -1;
@@ -756,7 +757,7 @@ function buildRight() {
 function buildAdvanced(eq, lfo, mix, m) {
   buildColorsEq(eq, m);
   buildLfo(lfo, m);
-  secBox(mix, 'Mix', 'transform');
+  secBox(mix, 'Mix', 'chroma');
   var tab = 9 * UL, s = Math.min(mix[2] - 2 * m, mix[3] - tab - 2 * m);
   makePad(mix[0] + (mix[2] - s) / 2, mix[1] + tab + m + (mix[3] - tab - 2 * m - s) / 2, s);
 }
@@ -819,7 +820,7 @@ function eqColumn(x, y, w, h, i) {
 // sit as 2 x 2 tiles (the Grid layout, chosen from four), each Wave over the two knobs over Target (a wide tile: Wave
 // and Target on the left, the knobs on the right).
 function buildLfo(b, m) {
-  secBox(b, 'Modulation', 'chroma');
+  secBox(b, 'Modulation', 'feedback');
   ui.lfoWave = []; ui.lfoTarget = [];
   var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = 10 * UK, tw = (C[2] - g) / 2, th = (C[3] - g) / 2;
   for (var i = 0; i < LFO_N; i++) lfoCell(i, [C[0] + (i % 2) * (tw + g), C[1] + Math.floor(i / 2) * (th + g), tw, th]);
@@ -827,7 +828,7 @@ function buildLfo(b, m) {
 }
 // Size of a Speed or Depth knob whose ring fits wRoom across and whose ring and label fit hRoom down.
 function lfoKnobSize(wRoom, hRoom) { return Math.max(16, Math.min(42 * UK, wRoom - 20, hRoom - 20 - (10 * UL + 3))); }
-function lfoKnob(i, which, x, y, ks) { makeItem('lfo' + i + which, x, y, ks, { fam: 'chroma' }); }
+function lfoKnob(i, which, x, y, ks) { makeItem('lfo' + i + which, x, y, ks, { fam: 'feedback' }); }
 // One channel's tile in the box r = [x, y, w, h], on a faint plate.
 function lfoCell(i, r) {
   el('div', at(r[0], r[1], r[2], r[3]) + ';box-sizing:border-box;border-radius:5px;background:rgba(0,0,0,0.07);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.13);pointer-events:none');

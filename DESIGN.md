@@ -1093,3 +1093,7 @@ Cost: about 0.30–0.34 ms per frame for all strategies on a GTX 1070, within no
    underlined, §31).
 2. **Don't stretch to fill.** Avoid extending a key, row or column so it wastes space. When something doesn't fit or
    leaves a gap, find a different arrangement, commit it, and flag that decision for Kyle to review.
+
+## 33. Mod page colours (2026-10-24)
+Modulation now takes the red Feedback family colours (fam 'feedback': window surface, nameplate, knob pointers and
+labels) and Mix the green Chromakey family (fam 'chroma').
