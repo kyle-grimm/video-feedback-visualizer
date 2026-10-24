@@ -1235,13 +1235,9 @@
   });
   window.addEventListener('resize', function () { if (S.open) setTimeout(placeHud, 160); });
 
-  // ---------------------------------------------------------------- the Lab key on the screen
-  window.onPanelBuilt = function () {
-    if (!ui.bezel) return;
-    ui.labKey = key(ui.bezel[0] + 14, ui.bezel[1] + 14, 52 * UK, 22 * UK, 'Lab', S.open ? 'on' : 'off', { fs: 9 * UL, aria: 'Style Lab', onClick: toggle });
-    ui.labKey.b.style.zIndex = '5';
-    placeHud();
-  };
+  // ---------------------------------------------------------------- after each panel build
+  // There is no Lab key on the screen any more (2026-10-24): the Lab opens only from the address (#lab, #tune=...).
+  window.onPanelBuilt = function () { if (ui.bezel) placeHud(); };
 
   // ---------------------------------------------------------------- start
   load();
@@ -1254,6 +1250,7 @@
   location.hash.slice(1).split('&').forEach(function (kv) { var p = kv.split('='); hp[p[0]] = p[1] == null ? true : p[1]; });
   if (hp.labfresh) { S = fresh(); save(); }
   if (hp.lab && !S.open) { S.open = true; if (!S.round) nextRound(true); }
+  else if (!hp.lab && !hp.tune && !hp.labdemo) S.open = false;   // no key to close it with otherwise
   if (S.open && !S.round) nextRound(true);
   if (S.open) Object.keys(FONTS).forEach(loadFont);
   loadHome().then(function () {

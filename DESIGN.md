@@ -1070,3 +1070,18 @@ Findings:
 
 Cost: about 0.30–0.34 ms per frame for all strategies on a GTX 1070, within noise of Off; the proxy read is ~2 KB every
 4 frames.
+
+## 31. Colors EQ fixed to Encoders; Main / Mod header key; no Lab key (2026-10-24)
+- **Colors EQ** is now only the Encoders layout: seven fader columns filling the window, plus the Flat key on its top
+  edge. The other eleven styles (Console, Spectrum, Rainbow, Wheel and the OP-1 set) and their style stepper are gone,
+  along with their helpers (`frameKeys`, `pickStyle`, the OP encoders and screens) and `vfv-eq-style`. They are
+  recoverable from git at 85d2eda. With no hue or width controls left, the bands sit at fixed hues (`EQ_HUES`) and one
+  fixed width (`EQ_WIDTH_DEG`, ±22°). The `eqHn` / `eqWn` / `eqWsel` parameters are removed, and presets that carry
+  them simply skip them.
+- **Header keys**: Full is replaced by a **Main / Mod** key showing both names. The page on show is at full strength
+  and underlined, the other dimmed, so it reads on light and dark keys alike. Tapping switches pages; the names stack in
+  the tall keys of the landscape layout. "Advanced" is renamed **Mod** wherever it shows (the page id stays 'adv' and
+  `vfv-page` is unchanged). The Main / Advanced tabs on the screen are gone. Fullscreen remains as a double-click on the
+  screen.
+- **Lab key removed** from the screen. The Style Lab still applies the colour schemes; its window opens only from the
+  address (`#lab`, `#tune=...`), and a Lab left open by an earlier session starts closed.
