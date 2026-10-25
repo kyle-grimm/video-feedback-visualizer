@@ -1124,3 +1124,10 @@ bottom in landscape).
 The seven faders now sit the standard spacing apart (the window's inner margin: `PG` = 14 px in portrait, 16 in
 landscape), which narrows them. The window has its own family, `eq`, blue in both schemes: the Style Lab gives it the
 look's blue window colour when the look has one (Layers in Day, Color in Night), else hue 215.
+
+## 37. Square Camera and Chromakey keys (2026-10-24)
+- **Camera** is one square key (On, Back and Front keys merged). A tap steps On -> Front <-> Back: while off it reads
+  On and a tap starts the front camera; while live it names the camera in use, LED lit, and a tap switches to the
+  other one. Press and hold (0.6 s) turns the camera off.
+- **Chromakey** On/Off is square.
+- Both keys share one side, `sqSide()`: 52 x UK, or wider if Front would not fit (78 px in portrait).

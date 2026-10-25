@@ -406,20 +406,35 @@ function syncFreeze() {
   ui.freeze.set(frozen ? 'on' : 'off'); ui.freeze.txt.textContent = frozen ? 'Play' : 'Freeze';
   ui.freeze.b.setAttribute('aria-label', frozen ? 'Play: resume the feedback loop' : 'Freeze the feedback loop');
 }
-// Camera cluster centred on (cx, cy): a tall On key on the left, Back over Front on the right, label below.
+// Camera: one square key centred on (cx, cy), label below. A tap steps On -> Front <-> Back: while off it reads On and a
+// tap starts the front camera; while live it names the camera in use (LED lit) and a tap switches to the other one.
+// Press and hold (HOLD_MS) turns the camera off.
+var SQ = 52, HOLD_MS = 600;   // least square key side (x UK) for the Camera and Chromakey keys
+// Side of the square Camera and Chromakey keys: SQ x UK, or wider if their longest label would not fit.
+function sqSide() { return Math.max(SQ * UK, textW('Front', 9 * UL, 700, 0.08) + 12 * UK); }
 function makeCamera(cx, cy, fam) {
-  var k = UK, bw = 104 * k, g = 4 * k, cw = (bw - g) / 2, top = cy - 30 * k, h = 52 * k, hh = (h - g) / 2, bx = cx - bw / 2;
-  ui.camOn = key(bx, top, cw, h, 'On', 'off', { aria: 'Camera on', onClick: function () { if (cam.stream || cam.busy) stopCamera(); else startCamera(cam.facing); } });
-  ui.camFacing = ['user', 'environment'].map(function (f, i) {
-    return key(bx + cw + g, i ? top : top + hh + g, cw, hh, i ? 'Back' : 'Front', 'off', { fs: 9 * UL, aria: (i ? 'Back' : 'Front') + ' camera', onClick: function () { startCamera(f); } });
+  var k = UK, S = sqSide(), top = cy + 22 * k - S, held = false, timer = 0;
+  ui.camOn = key(cx - S / 2, top, S, S, 'On', 'off', { fs: 9 * UL, aria: 'Camera', onClick: function () {
+    if (held) { held = false; return; }
+    if (cam.busy) return;
+    if (!cam.stream) startCamera('user');
+    else startCamera(cam.facing === 'user' ? 'environment' : 'user');
+  } });
+  var b = ui.camOn.b, clear = function () { clearTimeout(timer); timer = 0; };
+  b.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0) return;
+    held = false; clear();
+    timer = setTimeout(function () { timer = 0; if (cam.stream || cam.busy) { held = true; stopCamera(); flashTip(b, 'Camera off'); } }, HOLD_MS);
   });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { b.addEventListener(ev, clear); });
+  b.addEventListener('contextmenu', function (e) { e.preventDefault(); });   // a long press on a phone
   var lab = cl(cx, cy + 35 + 20 * (k - 1), 120 * UL, 'Camera', LABEL()); lab.className = 'knob-label'; if (fam) lab.dataset.fam = fam;
   syncCam();
 }
-// On / Off key for boolean params[param] centred on (cx, cy), no label: the key names the state and glows softly while
+// Square On / Off key for boolean params[param] centred on (cx, cy), no label: the key names the state and glows softly while
 // on (Chromakey; Luma Key on the Advanced page).
 function makeOnOff(cx, cy, param, aria) {
-  var k = key(cx - 36 * UK, cy - 14 * UK, 72 * UK, 28 * UK, 'Off', null, { aria: aria, onClick: function () { params[param] = !params[param]; syncKeyOn(); } });
+  var S = sqSide(), k = key(cx - S / 2, cy - S / 2, S, S, 'Off', null, { fs: 9 * UL, aria: aria, onClick: function () { params[param] = !params[param]; syncKeyOn(); } });
   k.shadow = k.b.style.boxShadow; k.param = param;
   (ui.onOff = ui.onOff || []).push(k);
   if (param === 'chromakeyEnabled') ui.keyOn = k;
@@ -532,8 +547,8 @@ function textW(t, px, weight, ls) {
 // A control's extent around its centre: width, and height above (top) and below (bot), label included.
 function itemExt(id, ks) {
   var R = ks / 2 + 10, lab = 10 * UL, lw = function (t) { return textW(t, lab, 700, 0.1); };
-  if (id === 'camera') return { w: Math.max(104 * UK, lw('Camera')), top: 30 * UK, bot: 35 + 20 * (UK - 1) + lab };
-  if (id === 'keyOn') return { w: 72 * UK, top: 14 * UK, bot: 14 * UK };
+  if (id === 'camera') return { w: Math.max(sqSide(), lw('Camera')), top: sqSide() - 22 * UK, bot: 35 + 20 * (UK - 1) + lab };
+  if (id === 'keyOn') return { w: sqSide(), top: sqSide() / 2, bot: sqSide() / 2 };
   var e = { w: Math.max(2 * R, lw(CONTROLS[id][0])), top: R, bot: R + 3 + lab }, names = (CONTROLS[id][1] || {}).legend;
   if (names) {   // the legend around the ring
     var r = R + 7 * UK, bh = 12 * UL;
@@ -1762,7 +1777,9 @@ function syncCam() {
   if (!ui.camOn) return;
   var live = !!cam.stream || cam.busy;
   ui.camOn.set(live ? 'on' : 'off');
-  ui.camFacing.forEach(function (k, i) { k.set(cam.facing === (i ? 'environment' : 'user') ? 'sel' : 'off'); });
+  var name = cam.facing === 'user' ? 'Front' : 'Back';
+  ui.camOn.txt.textContent = live ? name : 'On';
+  ui.camOn.b.setAttribute('aria-label', live ? name + ' camera: tap for the ' + (cam.facing === 'user' ? 'back' : 'front') + ', hold to turn off' : 'Camera on');
   drawPad();
 }
 
