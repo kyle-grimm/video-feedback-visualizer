@@ -736,7 +736,8 @@ function buildAdvanced(eq, lfo, mix, m) {
 // Colors EQ (Advanced page): a seven-band EQ on saturation around the hue spectrum. The saturation multiplier at a hue
 // is 1 plus every band's (gain - 1) times its bell (a Gaussian of the hue distance over the width), clamped at 0; the
 // shader (hueEq) applies the same sum at each pixel's hue after Saturation, skipped while every gain is 1. The window is
-// seven fader columns filling it (the Encoders style, chosen from twelve) and a Flat key on its top edge (every gain
+// seven fader columns filling it, the standard spacing m apart (the Encoders style, chosen from twelve), on a blue
+// window (family 'eq', blue in both schemes) and a Flat key on its top edge (every gain
 // back to 1). A column fills from the bottom to its level: below the middle (1x) in the band's colour, greying towards
 // the bottom, and white from the middle up. Tap or drag a column for its level; double-click returns 1x; the wheel and
 // arrow keys nudge it.
@@ -747,13 +748,13 @@ function eqSetGain(i, g) { g = clamp(g, 0, 2); if (Math.abs(g - 1) < 0.05) g = 1
 function eqNudge(i, d) { var g0 = params['eqG' + i], g = clamp(g0 + d, 0, 2); if ((g0 - 1) * (g - 1) < 0) g = 1; params['eqG' + i] = Math.round(g * 1000) / 1000; }
 function eqTip(target, i) { showTip(target, EQ_NAMES[i] + '  ' + params['eqG' + i].toFixed(2) + '×'); }
 function buildColorsEq(b, m) {
-  secBox(b, 'Colors EQ', 'layers');
+  secBox(b, 'Colors EQ', 'eq');
   ui.eqParts = [];
   var kh = 22 * UK, f = 9 * UL, kw = Math.max(kh * 1.2, textW('Flat', f, 700, 0.08) + 16 * UL);
   var flat = key(b[0] + b[2] - 10 - kw, b[1] - kh / 2, kw, kh, 'Flat', null, { fs: f, aria: 'Flatten the EQ (every gain to 1x)',
     onClick: function () { for (var j = 0; j < EQ_N; j++) params['eqG' + j] = 1; eqRefresh(); flashTip(flat.b, 'EQ flat'); } });
   flat.b.style.zIndex = '2';
-  var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = 6 * UK, cw = (C[2] - (EQ_N - 1) * g) / EQ_N;
+  var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = m, cw = (C[2] - (EQ_N - 1) * g) / EQ_N;
   for (var i = 0; i < EQ_N; i++) eqColumn(C[0] + i * (cw + g), C[1], cw, C[3], i);
   syncers.push(eqRefresh);
   eqRefresh();

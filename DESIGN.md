@@ -1119,3 +1119,8 @@ labels) and Mix the green Chromakey family (fam 'chroma').
 ## 35. Header key order (2026-10-24)
 The header keys now run Day/Night, Presets/Output, Record, Freeze/Play, Main/Mod (left to right in portrait, top to
 bottom in landscape).
+
+## 36. Colors EQ: spaced faders, blue window (2026-10-24)
+The seven faders now sit the standard spacing apart (the window's inner margin: `PG` = 14 px in portrait, 16 in
+landscape), which narrows them. The window has its own family, `eq`, blue in both schemes: the Style Lab gives it the
+look's blue window colour when the look has one (Layers in Day, Color in Night), else hue 215.

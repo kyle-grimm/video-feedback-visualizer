@@ -243,6 +243,10 @@
   function styleCss(g) {
     var css = '', stageC = hsl(g.sHue, g.sSat, g.sLight), tx = texture(g), acc = hsl(g.accentHue, g.accSat, 0.8);
     FAMS.forEach(function (f, i) { css += '#stage [data-fam="' + f + '"]{--anod:' + panelColor(g, i) + ';--fc:' + keyColor(g, i) + '}\n'; });
+    // Colors EQ (family eq) is blue in both schemes: the look's own blue window when it has one, else hue 215.
+    var bi = -1; for (var bj = 0; bj < 5; bj++) if (g.sat[bj] > 0 && Math.abs(((g.hue[bj] - 215 + 540) % 360) - 180) < 15) { bi = bj; break; }
+    var bg = bi < 0 ? { hue: [215], sat: [1], pSat: g.pSat, pLight: g.pLight, kSat: g.kSat, kLight: g.kLight } : g;
+    css += '#stage [data-fam="eq"]{--anod:' + panelColor(bg, Math.max(bi, 0)) + ';--fc:' + keyColor(bg, Math.max(bi, 0)) + '}\n';
     css += 'html,body{background:' + stageC + '!important}\n';
     css += '#panel{background:linear-gradient(to bottom,' + hsl(g.sHue, g.sSat, g.sLight + 0.03) + ',' + stageC + ' 48px)!important}\n';
     css += '#stage .fam{background-color:var(--anod)!important;background-image:' + tx.img + '!important;background-size:' + tx.size + '!important}\n';
