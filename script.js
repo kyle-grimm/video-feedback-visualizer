@@ -455,7 +455,8 @@ function makeItem(id, cx, cy, size, o) {
 }
 // The runaway guard's state (the engine: guardStep, after the feedback shader).
 var GUARD_EVERY = 4, GUARD_SYNC = false;   // GUARD_SYNC: read the proxy at once (tests; it stalls the GPU)
-var guard = { stats: null, n: 0, fence: null, fb: 1, act: 0, ex: null, T: null };
+var guard = { stats: null, n: 0, fence: null, fb: 1, act: 0, ex: null, T: null, up: 0, U: null, dark: 0 };
+var GUARD_UP_MAX = 0.99, GUARD_UP = 0.8;   // dark field: Persistence rises up to GUARD_UP of the way to GUARD_UP_MAX
 
 // A chip of the key colour, usually beside the Chromakey nameplate.
 function makeSwatch(x, y) {
@@ -1664,7 +1665,15 @@ function guardStep(measureNow) {
   }
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, CW, CH);
 }
-function guardEase() { if (guard.T != null) guard.fb += (guard.T - guard.fb) * 0.08; }
+function guardEase() {
+  if (guard.T != null) guard.fb += (guard.T - guard.fb) * 0.08;
+  if (guard.U != null) guard.up += (guard.U - guard.up) * 0.08;
+}
+// Persistence f after the guard: shortened by fb (a runaway), then raised by up towards GUARD_UP_MAX (too dark).
+function guardFeedback(f) {
+  f *= guard.fb;
+  return f < GUARD_UP_MAX ? f + (GUARD_UP_MAX - f) * GUARD_UP * guard.up : f;
+}
 // The proxy's statistics, the excess scores and the Persistence scale they call for.
 function guardStats() {
   var px = guard.px, n = px.length / 4, sl = 0, sl2 = 0, ss = 0, wh = 0, bk = 0;
@@ -1676,9 +1685,13 @@ function guardStats() {
   var c = function (v) { return clamp(v, 0, 1); };
   // Triggers sit past the healthy look (the default field: saturation ~0.83, spread ~0.06, no white or black), at its
   // runaway forms: everything saturated, white or black, or the spread collapsing to a flat field.
-  var ex = guard.ex = { sat: c((st.sat - 0.9) / 0.08), white: c((st.white - 0.25) / 0.45), black: c((st.black - 0.4) / 0.45), flat: c((0.03 - st.sd) / 0.025) };
-  guard.act = c(Math.max(ex.sat, ex.white, ex.black, ex.flat));
-  guard.T = 1 - 0.45 * guard.act;   // eased towards a little every frame (guardEase), so the change never steps
+  // Too dark (the default field's mean is ~0.4, with no black) breathes the other way: Persistence rises, so the field
+  // holds what light it has. A dark field is also flat, so flatness only counts in proportion to how far it is not dark.
+  var dark = c(Math.max((0.15 - st.mean) / 0.1, (st.black - 0.3) / 0.45));
+  var ex = guard.ex = { sat: c((st.sat - 0.9) / 0.08), white: c((st.white - 0.25) / 0.45), dark: dark, flat: c((0.03 - st.sd) / 0.025) * (1 - dark) };
+  guard.act = c(Math.max(ex.sat, ex.white, ex.flat)); guard.dark = dark;
+  guard.T = 1 - 0.45 * guard.act;   // both eased towards a little every frame (guardEase), so the change never steps
+  guard.U = dark * (1 - guard.act);
 }
 
 var frameCount = 0;
@@ -1705,7 +1718,7 @@ function renderFeedbackPass(t) {
   uploadFeedbackUniforms(t, p);
   gl.uniform1f(feedbackUniforms.u_delayMix, delay > 0 ? 0.5 : 0);
   gl.uniform1f(feedbackUniforms.u_frameSeed, (frameCount++ % 997) * 13.7);
-  if (guard.fb < 0.9999) gl.uniform1f(feedbackUniforms.u_feedback, p.feedback * guard.fb);
+  if (guard.fb < 0.9999 || guard.up > 0.0001) gl.uniform1f(feedbackUniforms.u_feedback, guardFeedback(p.feedback));
   drawFullscreenTriangle();
   lastWritten = write;
   ringWriteIndex = wrapIndex(ringWriteIndex + 1, n);
@@ -1762,7 +1775,7 @@ canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); c
 canvas.addEventListener('webglcontextrestored', function () {
   linkPrograms();
   FB_FLOAT = detectFloatBuffers();
-  guard.fbo = null; guard.pbo = null; guard.fence = null; guard.T = null; guard.fb = 1;
+  guard.fbo = null; guard.pbo = null; guard.fence = null; guard.T = null; guard.fb = 1; guard.U = null; guard.up = 0;
   buffers = createRingBuffers(2);
   clearScreen();
   cameraTexture = createCameraTexture(); cameraPrevTexture = createCameraTexture();
