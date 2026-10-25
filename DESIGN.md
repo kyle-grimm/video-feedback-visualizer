@@ -1131,3 +1131,7 @@ look's blue window colour when the look has one (Layers in Day, Color in Night),
   other one. Press and hold (0.6 s) turns the camera off.
 - **Chromakey** On/Off is square.
 - Both keys share one side, `sqSide()`: 52 x UK, or wider if Front would not fit (78 px in portrait).
+
+## 38. Narrower Colors EQ bands (2026-10-24)
+Each band's width (`EQ_WIDTH_DEG`, the bell's standard deviation) is now ±14° (was ±22°). Halfway between bands 30°
+apart (Red, Orange, Yellow) a band now reaches 56% of its gain (was 79%); halfway between bands 60° apart, 10% (was 39%).
