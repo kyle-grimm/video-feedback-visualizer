@@ -1115,3 +1115,7 @@ labels) and Mix the green Chromakey family (fam 'chroma').
   - Record red.
   - Day/Night keeps the other scheme's colours.
   All follow §32: they name the option a tap gives.
+
+## 35. Header key order (2026-10-24)
+The header keys now run Day/Night, Presets/Output, Record, Freeze/Play, Main/Mod (left to right in portrait, top to
+bottom in landscape).
