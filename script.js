@@ -278,7 +278,7 @@ var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSp
 // Colors EQ (Advanced page): seven bands at fixed hues (EQ_HUES) and a fixed width (EQ_WIDTH_DEG, degrees: each bell's
 // standard deviation), each with a gain (eqGn, 0-2x saturation, 1 = unchanged) on a fader.
 var EQ_N = 7, EQ_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta'], EQ_HUES = [0, 30, 60, 120, 180, 240, 300];
-var EQ_WIDTH_DEG = 14;
+var EQ_WIDTH_DEG = 9;
 var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
 for (q = 0; q < EQ_N; q++) DEFAULTS['eqG' + q] = 1;
 for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none

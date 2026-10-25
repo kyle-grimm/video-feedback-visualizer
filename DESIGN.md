@@ -1135,3 +1135,7 @@ look's blue window colour when the look has one (Layers in Day, Color in Night),
 ## 38. Narrower Colors EQ bands (2026-10-24)
 Each band's width (`EQ_WIDTH_DEG`, the bell's standard deviation) is now ±14° (was ±22°). Halfway between bands 30°
 apart (Red, Orange, Yellow) a band now reaches 56% of its gain (was 79%); halfway between bands 60° apart, 10% (was 39%).
+
+## 39. Colors EQ bands narrowed again (2026-10-24)
+`EQ_WIDTH_DEG` is now ±9° (was ±14°). Halfway between bands 30° apart a band reaches 25% of its gain; between bands
+60° apart, under 1%: each fader now acts on its own colour only.
