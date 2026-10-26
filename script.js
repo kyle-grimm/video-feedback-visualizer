@@ -776,7 +776,7 @@ function buildAdvanced(eq, lfo, trig, m) {
 // Trigger window (Mod page; a prototype): three trigger keys along the top fire their envelopes (held = sustain;
 // Space or Enter on a focused key, or 1-3 on the keyboard) and select the one shown below: an Envelope screen (the
 // ADSR shape, and a dot riding it while it runs), Attack, Decay, Sustain, Release and Depth knobs, and a Target key
-// naming the knob it moves (tap it to pick one on the Main page). A key glows with its envelope's level, and its LED
+// (TARGET in red, or the knob it moves in white; tap it to pick one on the Main page). A key glows with its envelope's level, and its LED
 // marks the selected one. Tall window (portrait): keys, screen, then the knobs two to a row with Target beside Depth.
 // Wide window (landscape): keys across the top, the screen over Target on the left, the five knobs in a row.
 var trigSel = 0;
@@ -825,7 +825,7 @@ function makeTrigKey(i, x, y, w, h) {
 }
 function makeTrigScreen(x, y, w, h) { ui.trigScreen = glass(x, y, w, h, ''); }
 function makeTrigTarget(x, y, w, h) {
-  var k = key(x, y, w, h, '', 'off', { fs: 9 * UL, onClick: function () { pickLfo = LFO_N + trigSel; setPage('main'); } });
+  var k = key(x, y, w, h, '', null, { fs: 9 * UL, onClick: function () { pickLfo = LFO_N + trigSel; setPage('main'); } });
   k.w = w; ui.trigTarget = k;
 }
 // Selecting a trigger: the knobs, screen and Target key show it.
@@ -837,14 +837,7 @@ function trigSelect(i) {
 }
 function syncTrig() {
   (ui.trigKeys || []).forEach(function (k, i) { k.set(i === trigSel ? 'sel' : 'off'); });
-  var k = ui.trigTarget;
-  if (k) {
-    var t = trigLive(trigSel, true), name = t ? CONTROLS[t][0] : 'None', s = 'Target · ' + name, fs = 9 * UL;
-    fs = Math.min(fs, Math.floor(fs * (k.w - 14 * UK) / textW(s, fs, 700, 0.08) * 10) / 10);
-    k.txt.textContent = s; k.txt.style.fontSize = fs + 'px';
-    k.set(t ? 'mod' : 'off');
-    k.b.setAttribute('aria-label', 'Trigger ' + (trigSel + 1) + ' target: ' + name + '. Pick a knob on the Main page');
-  }
+  if (ui.trigTarget) syncTargetKey(ui.trigTarget, trigLive(trigSel, true), 'Trigger ' + (trigSel + 1));
   drawTrig();
 }
 // The envelope's outline in the screen, as [x, level] points: Attack, Decay and Release each up to a quarter of the
@@ -948,14 +941,16 @@ function eqColumn(x, y, w, h, i) {
 
 // Modulation window (Advanced page): four LFO channels, each with a Wave screen (tap it to step through Sine, Tri,
 // Saw, Square and S&H; the wheel and arrow keys step too) showing the wave and where the LFO is in its cycle, Speed and
-// Depth knobs, and a Target key naming the knob it drives (tap it to pick one on the Main page, pickLfo). The channels
-// sit as 2 x 2 tiles (the Grid layout, chosen from four), each Wave over the two knobs over Target (a wide tile: Wave
-// and Target on the left, the knobs on the right).
+// Depth knobs, and a Target key (TARGET in red, or the knob it drives in white; tap it to pick one on the Main page,
+// pickLfo). The channels sit as tiles (the Grid layout, chosen from four), 2 x 2, or 4 across a window more than 1.6x as
+// wide as it is tall (landscape), each Wave with Target directly under it, then Speed over Depth (a wide tile: Wave
+// over Target on the left, Speed over Depth on the right).
 function buildLfo(b, m) {
   secBox(b, 'Modulation', 'feedback');
   ui.lfoWave = []; ui.lfoTarget = [];
-  var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = 10 * UK, tw = (C[2] - g) / 2, th = (C[3] - g) / 2;
-  for (var i = 0; i < LFO_N; i++) lfoCell(i, [C[0] + (i % 2) * (tw + g), C[1] + Math.floor(i / 2) * (th + g), tw, th]);
+  var top = b[1] + 9 * UL + m * 0.6, C = [b[0] + m, top, b[2] - 2 * m, b[1] + b[3] - m - top], g = 10 * UK;
+  var nc = C[2] > 1.6 * C[3] ? LFO_N : 2, nr = LFO_N / nc, tw = (C[2] - (nc - 1) * g) / nc, th = (C[3] - (nr - 1) * g) / nr;
+  for (var i = 0; i < LFO_N; i++) lfoCell(i, [C[0] + (i % nc) * (tw + g), C[1] + Math.floor(i / nc) * (th + g), tw, th]);
   syncers.push(syncLfo); syncLfo();
 }
 // Size of a Speed or Depth knob whose ring fits wRoom across and whose ring and label fit hRoom down.
@@ -965,22 +960,21 @@ function lfoKnob(i, which, x, y, ks) { makeItem('lfo' + i + which, x, y, ks, { f
 function lfoCell(i, r) {
   el('div', at(r[0], r[1], r[2], r[3]) + ';box-sizing:border-box;border-radius:5px;background:rgba(0,0,0,0.07);box-shadow:inset 0 0 0 1px rgba(0,0,0,0.13);pointer-events:none');
   var p = 6 * UK, g = 8 * UK, kh = 28 * UK, lab = 10 * UL + 3, x = r[0] + p, y = r[1] + p, w = r[2] - 2 * p, h = r[3] - 2 * p;
-  var ks, R, ew, waveH;
-  if (w > 1.6 * h) {   // wide tile: Wave over Target on the left, the knobs side by side on the right
-    var lw = w * 0.46, rw = w - lw - g;
-    ks = lfoKnobSize(rw / 2, h); R = ks / 2 + 10;
+  var ks, R, waveH;
+  if (w > 1.6 * h) {   // wide tile: Wave over Target on the left, Speed over Depth on the right
+    var lw = w * 0.5, rw = w - lw - g;
+    ks = lfoKnobSize(rw, h / 2 - g / 2); R = ks / 2 + 10;
     makeLfoWave(i, x, y, lw, h - kh - g);
     makeLfoTarget(i, x, y + h - kh, lw, kh);
-    var kx = spread(x + lw + g, x + w, [2 * R, 2 * R]), ky = y + (h - lab) / 2;
-    lfoKnob(i, 'Rate', kx[0] + R, ky, ks); lfoKnob(i, 'Depth', kx[1] + R, ky, ks);
-  } else {   // tile: Wave over the knobs over Target
-    waveH = Math.min(h * 0.32, w * 0.6);
-    ew = textW('Speed', 10 * UL, 700, 0.1) + 6 * UK;
-    ks = lfoKnobSize(Math.min(w / 2, ew + 20), h - waveH - kh - 2 * g); R = ks / 2 + 10; ew = Math.max(ew, 2 * R);
-    var ty = spread(y, y + h, [waveH, 2 * R + lab, kh]), kx2 = spread(x, x + w, [ew, ew]);
-    makeLfoWave(i, x, ty[0], w, waveH);
-    lfoKnob(i, 'Rate', kx2[0] + ew / 2, ty[1] + R, ks); lfoKnob(i, 'Depth', kx2[1] + ew / 2, ty[1] + R, ks);
-    makeLfoTarget(i, x, ty[2], w, kh);
+    var ky = spread(y, y + h, [2 * R + lab, 2 * R + lab]), kx = x + lw + g + rw / 2;
+    lfoKnob(i, 'Rate', kx, ky[0] + R, ks); lfoKnob(i, 'Depth', kx, ky[1] + R, ks);
+  } else {   // tile: Wave, Target directly under it, then Speed over Depth
+    waveH = Math.min(h * 0.3, w * 0.62);
+    ks = lfoKnobSize(w, (h - waveH - kh - g) / 2 - g / 2); R = ks / 2 + 10;
+    makeLfoWave(i, x, y, w, waveH);
+    makeLfoTarget(i, x, y + waveH + g * 0.6, w, kh);
+    var ty = spread(y + waveH + g * 0.6 + kh, y + h, [2 * R + lab, 2 * R + lab]);
+    lfoKnob(i, 'Rate', x + w / 2, ty[0] + R, ks); lfoKnob(i, 'Depth', x + w / 2, ty[1] + R, ks);
   }
 }
 function makeLfoWave(i, x, y, w, h) {
@@ -998,17 +992,18 @@ function makeLfoWave(i, x, y, w, h) {
   ui.lfoWave[i] = G;
 }
 function makeLfoTarget(i, x, y, w, h) {
-  var k = key(x, y, w, h, '', 'off', { fs: 9 * UL, onClick: function () { pickLfo = i; setPage('main'); } });
+  var k = key(x, y, w, h, '', null, { fs: 9 * UL, onClick: function () { pickLfo = i; setPage('main'); } });
   k.w = w; ui.lfoTarget[i] = k;
 }
+// A Target key (Modulation and Trigger windows): TARGET in red while there's none, else the target knob's name in white.
+function syncTargetKey(k, t, src) {
+  var s = t ? CONTROLS[t][0] : 'Target', fs = 9 * UL;
+  fs = Math.min(fs, Math.floor(fs * (k.w - 14 * UK) / textW(s, fs, 700, 0.08) * 10) / 10);
+  k.txt.textContent = s; k.txt.style.fontSize = fs + 'px'; k.txt.style.color = t ? '#ffffff' : P.rec;
+  k.b.setAttribute('aria-label', src + ' target: ' + (t ? s : 'none') + '. Pick a knob on the Main page');
+}
 function syncLfo() {
-  (ui.lfoTarget || []).forEach(function (k, i) {
-    var t = lfoLive(i, true), name = t ? CONTROLS[t][0] : 'None', s = (i + 1) + ' · ' + name, fs = 9 * UL;
-    fs = Math.min(fs, Math.floor(fs * (k.w - 14 * UK) / textW(s, fs, 700, 0.08) * 10) / 10);
-    k.txt.textContent = s; k.txt.style.fontSize = fs + 'px';
-    k.set(t ? 'mod' : 'off');
-    k.b.setAttribute('aria-label', 'LFO ' + (i + 1) + ' target: ' + name + '. Pick a knob on the Main page');
-  });
+  (ui.lfoTarget || []).forEach(function (k, i) { syncTargetKey(k, lfoLive(i, true), 'LFO ' + (i + 1)); });
   drawLfoWaves();
 }
 var SH_DRAW = [0.55, -0.35, 0.9, -0.8, 0.15, -0.55];   // the S&H screen's picture of random steps

@@ -1215,3 +1215,14 @@ picked as for an LFO).
   fit in one row. In landscape, the five knobs share one row beside the screen, and there's some free height above and
   below them. I left it free rather than stretch the screen or the knobs.
 - *Keyboard:* the digits 1-3 weren't used by anything else.
+
+## 43. Target keys and the Modulation tiles (2026-10-25)
+
+- Every Target key (the four LFOs' and the Trigger window's) reads TARGET in red (`P.rec`) while it has no target, and
+  the target knob's name in white once it has one. The "1 ·" and "Target ·" prefixes and the keys' LEDs are gone
+  (`syncTargetKey`).
+- Each Modulation tile puts its Target key directly under the waveform screen, with Speed above Depth below it. A wide
+  tile has the waveform over Target on the left and Speed over Depth on the right.
+- For review: in landscape, the Modulation window has the tiles in one row of four instead of 2 × 2, because a window
+  more than 1.6× as wide as it is tall gets four across. In 2 × 2, the tiles there are wide and short, and two knobs
+  stacked would have shrunk to about 26 px. One row gives tall tiles, like portrait's, with full-size knobs.
