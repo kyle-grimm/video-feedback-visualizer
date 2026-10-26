@@ -285,12 +285,12 @@ for (var q = 0; q < LFO_N; q++) {
   PD['lfo' + q + 'Depth'] = { min: 0, max: 1, def: 0.3, step: 0.01, f: pct };
 }
 // Mod page (experimental): three triggers, each an ADSR envelope fired by its key (held = sustain) that moves a target
-// (one of the Main page's knobs) by Depth (a share of the knob's sweep, either way) at the envelope's peak. Each starts
-// on a different target and shape so the keys do something at once: a zoom punch, a hue swell, a rotation kick.
+// (one of the Main page's knobs) by Depth (a share of the knob's sweep, either way) at the envelope's peak. They start
+// with no target, each with a different shape: a punch, a swell, a kick (with a negative depth).
 var TRIG_N = 3, TRIG_DEF = [
-  { t: 'zoom', a: 0.01, d: 0.35, s: 0, r: 0.25, depth: 0.35 },
-  { t: 'hue', a: 0.6, d: 0.8, s: 0.6, r: 1.5, depth: 0.5 },
-  { t: 'rotate', a: 0.02, d: 0.5, s: 0.4, r: 0.8, depth: -0.3 }
+  { a: 0.01, d: 0.35, s: 0, r: 0.25, depth: 0.35 },
+  { a: 0.6, d: 0.8, s: 0.6, r: 1.5, depth: 0.5 },
+  { a: 0.02, d: 0.5, s: 0.4, r: 0.8, depth: -0.3 }
 ];
 var secs = function (v) { return v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s'; };
 for (q = 0; q < TRIG_N; q++) {
@@ -309,7 +309,7 @@ var EQ_WIDTH_DEG = 9;
 var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
 for (q = 0; q < EQ_N; q++) DEFAULTS['eqG' + q] = 1;
 for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none
-for (q = 0; q < TRIG_N; q++) DEFAULTS['trig' + q + 'Target'] = TRIG_DEF[q].t;
+for (q = 0; q < TRIG_N; q++) DEFAULTS['trig' + q + 'Target'] = '';
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
 // Camera layer state (not a preset parameter): facing 'user' (front, mirrored) or 'environment' (back).

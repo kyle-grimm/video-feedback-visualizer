@@ -1226,3 +1226,9 @@ picked as for an LFO).
 - For review: in landscape, the Modulation window has the tiles in one row of four instead of 2 × 2, because a window
   more than 1.6× as wide as it is tall gets four across. In 2 × 2, the tiles there are wide and short, and two knobs
   stacked would have shrunk to about 26 px. One row gives tall tiles, like portrait's, with full-size knobs.
+
+## 44. Triggers start unassigned (2026-10-25)
+
+Kyle asked for the triggers to start with no target. Each still starts with its own envelope shape and depth (punch,
+swell, kick), so a trigger works as soon as it's given a target. §42's "a zoom punch, a hue swell, a rotation kick"
+starting targets are gone.
