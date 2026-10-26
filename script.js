@@ -380,11 +380,11 @@ function makeScreen(x, y, w, h) {
   if (!pseudoFs) ui.screen.appendChild(glCanvas);   // a full-screen overlay keeps the canvas through rebuilds
   ui.screen.addEventListener('dblclick', toggleFullscreen);
 }
-// Header keys, in order: Day/Night, Presets/Output (yellow), Record (red; Capture while frozen), Freeze/Play (blue),
-// Main/Mod (green), each naming the option it switches to (DESIGN.md §32), in the NKEYS rects [x, y, w, h].
+// Header keys, in order: Day/Night, Presets/Output, Record (Capture while frozen), Freeze/Play, Main/Mod, each naming
+// the option it switches to (DESIGN.md §32), in the NKEYS rects [x, y, w, h].
 // The label size shrinks from fs if the longest label the keys can show would not fit the key width. Class hk marks
-// them for the Style Lab, which colours them to the background (the Day/Night key in the other scheme's colours) or in
-// their own colour (hk-green, hk-blue, hk-yellow, hk-rec red).
+// them for the Style Lab, which colours the Day/Night key in the other scheme's black or white and the others by role
+// (hk-page, hk-freeze, hk-presets, hk-rec) in the colour variant on show (lab.js KEYV, the Keys key on the screen).
 var NKEYS = 5, KEY_LABELS = ['Night', 'Day', 'Main', 'Mod', 'Freeze', 'Play', 'Presets', 'Output', 'Record', 'Capture', 'Stop', 'Saving'];
 function makeKeys(r, fs) {
   fs = fs || 10;
@@ -392,10 +392,10 @@ function makeKeys(r, fs) {
   fs = Math.min(fs, Math.floor(fs * (r[0][2] - 10) / widest * 10) / 10);
   var K = function (i, label, led, o, cls) { o.fs = fs; var k = key(r[i][0], r[i][1], r[i][2], r[i][3], label, led, o); k.b.className += ' hk' + (cls ? ' ' + cls : ''); return k; };
   ui.scheme = K(0, 'Day', null, { aria: 'Day / night colour scheme', onClick: toggleScheme }, 'hk-scheme');
-  ui.presets = K(1, 'Presets', null, { aria: 'Presets', onClick: presetsKey }, 'hk-yellow');
+  ui.presets = K(1, 'Presets', null, { aria: 'Presets', onClick: presetsKey }, 'hk-presets');
   ui.rec = K(2, 'Record', 'off', { noLed: true, aria: 'Record the output to a video file', onClick: toggleRecording }, 'hk-rec');
-  ui.freeze = K(3, 'Freeze', 'off', { noLed: true, aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; syncFreeze(); syncRec(); } }, 'hk-blue');
-  ui.pageKey = K(4, page === 'adv' ? 'Main' : 'Mod', null, { aria: 'Page', onClick: function () { setPage(page === 'adv' ? 'main' : 'adv'); } }, 'hk-green');
+  ui.freeze = K(3, 'Freeze', 'off', { noLed: true, aria: 'Freeze the feedback loop', onClick: function () { frozen = !frozen; syncFreeze(); syncRec(); } }, 'hk-freeze');
+  ui.pageKey = K(4, page === 'adv' ? 'Main' : 'Mod', null, { aria: 'Page', onClick: function () { setPage(page === 'adv' ? 'main' : 'adv'); } }, 'hk-page');
   // Main / Mod, like Day / Night, names only the page the key switches to (DESIGN.md §32).
   ui.pageKey.b.setAttribute('aria-label', 'Switch to the ' + (page === 'adv' ? 'Main' : 'Mod') + ' page');
   syncFreeze(); syncScheme(); syncRec(); syncPresetsKey(); renderPresets();

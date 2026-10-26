@@ -777,14 +777,42 @@
       'color:' + (dark ? '#ebebeb' : hsl(g.sHue, g.sSat, 0.2)) + '!important;box-shadow:' + (dark ? '0 2px 0 rgba(0,0,0,0.6),0 4px 7px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.08)'
       : '0 2px 0 rgba(0,0,0,0.22),0 3px 6px rgba(0,0,0,0.16),inset 0 1px 0 rgba(255,255,255,0.75)') + '!important}\n';
   }
+  // Header-key colour variants (experimental; the Keys key at the screen's top left steps through them, kept in
+  // localStorage 'vfv-keys-var'). Record stays red, Freeze a blue, Main/Mod and Presets each a purple, yellow or green;
+  // the Day/Night key keeps its black / white. A key is [finish, colour, type colour (white if left out)]. Finishes:
+  // solid (a glossy gradient), flat (matte), outline (dark body, coloured rim and type), led (dark body, a coloured
+  // light bar along the bottom), neon (dark body, glowing type and halo).
+  var KEYV = [
+    { name: 'Bright', page: ['solid', '#3aa95b'], freeze: ['solid', '#4a7fd6'], presets: ['solid', '#ecc73a', '#2b2408'], rec: ['solid', '#d43a2e'] },
+    { name: 'Royal', page: ['solid', '#7d52cc'], freeze: ['solid', '#3f63d8'], presets: ['solid', '#e3b62c', '#2b2408'], rec: ['solid', '#d43a2e'] },
+    { name: 'Pastel', page: ['solid', '#c7b3ee', '#2c2142'], freeze: ['solid', '#a7c4f0', '#16283f'], presets: ['solid', '#bcd9ad', '#1c3216'], rec: ['solid', '#ea6f62', '#3a0d08'] },
+    { name: 'Anodized', page: ['solid', '#4d2c7e'], freeze: ['solid', '#1f3b7a'], presets: ['solid', '#2b5b35'], rec: ['solid', '#7c1d1d'] },
+    { name: 'Outline', page: ['outline', '#f0c93a'], freeze: ['outline', '#4aa3ff'], presets: ['outline', '#b58cf2'], rec: ['outline', '#ff5146'] },
+    { name: 'LED', page: ['led', '#3fd16b'], freeze: ['led', '#4a8dff'], presets: ['led', '#f5cf3b'], rec: ['led', '#ff4a40'] },
+    { name: 'Neon', page: ['neon', '#c77dff'], freeze: ['neon', '#4cc3ff'], presets: ['neon', '#9dff5c'], rec: ['neon', '#ff3b3b'] },
+    { name: 'Synth', page: ['flat', '#d6a222', '#2a1f05'], freeze: ['flat', '#2f7fb5'], presets: ['flat', '#7b4fa8'], rec: ['flat', '#c8352b'] }
+  ];
+  var keyVar = 0;
+  try { keyVar = Math.max(0, Math.min(KEYV.length - 1, parseInt(localStorage.getItem('vfv-keys-var'), 10) || 0)); } catch (e) { /* Bright */ }
+  function mixHex(a, b, t) {
+    var ch = function (h, i) { return parseInt(h.slice(1 + 2 * i, 3 + 2 * i), 16); };
+    return '#' + [0, 1, 2].map(function (i) { return ('0' + Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16)).slice(-2); }).join('');
+  }
+  function skinCss(sel, k) {
+    var f = k[0], c = k[1], ink = k[2] || '#ffffff', body = 'linear-gradient(to bottom,#3a393e,#2a292d 55%,#232226)';
+    var drop = '0 2px 0 rgba(0,0,0,0.55),0 4px 7px rgba(0,0,0,0.4)', bg, col = ink, sh, ts = 'none';
+    if (f === 'solid') { bg = 'linear-gradient(to bottom,' + mixHex(c, '#ffffff', 0.18) + ',' + c + ' 55%,' + mixHex(c, '#000000', 0.16) + ')'; sh = drop + ',inset 0 1px 0 rgba(255,255,255,0.3)'; }
+    else if (f === 'flat') { bg = c; sh = '0 2px 0 ' + mixHex(c, '#000000', 0.45) + ',0 3px 5px rgba(0,0,0,0.3)'; }
+    else if (f === 'outline') { bg = body; col = c; sh = drop + ',inset 0 0 0 2px ' + c; }
+    else if (f === 'led') { bg = 'linear-gradient(' + c + ',' + c + ') center bottom 4px/46% 3px no-repeat,' + body; col = '#f1f1f1'; sh = drop + ',inset 0 1px 0 rgba(255,255,255,0.08)'; }
+    else { bg = body; col = c; ts = '0 0 6px ' + c + ',0 0 12px ' + c; sh = drop + ',0 0 10px ' + c + '59,inset 0 0 0 1px ' + c + '66'; }
+    return sel + '{background:' + bg + '!important;color:' + col + '!important;box-shadow:' + sh + '!important;text-shadow:' + ts + '!important}\n';
+  }
   function schemeCss(st) {
     var om = S.mode === 'day' ? 'night' : 'day', css = keyCss('#stage .hk', st) + keyCss('#stage .hk.hk-scheme', resolve(S.looks[om] || BUILTIN[om]));
-    // Header keys in their own colours, the same in both schemes: Main/Mod green, Freeze/Play blue, Presets/Output
-    // yellow (dark type), Record red.
-    css += '#stage .hk.hk-green{background:linear-gradient(to bottom,#4cc06c,#2f9a4c 55%,#247c3c)!important;color:#fff!important}\n' +
-      '#stage .hk.hk-blue{background:linear-gradient(to bottom,#5b8fe0,#3f74c9 55%,#3062ae)!important;color:#fff!important}\n' +
-      '#stage .hk.hk-yellow{background:linear-gradient(to bottom,#f6d94e,#e6bb26 55%,#cc9f14)!important;color:#2b2408!important}\n' +
-      '#stage .hk.hk-rec{background:linear-gradient(to bottom,#e5493b,#c62f23 55%,#a8231a)!important;color:#fff!important}\n';
+    // Header keys by role in the colour variant on show (the same in both schemes).
+    var v = KEYV[keyVar] || KEYV[0];
+    ['page', 'freeze', 'presets', 'rec'].forEach(function (r) { css += skinCss('#stage .hk.hk-' + r, v[r]); });
     if (S.mode === 'day') css += '#stage .bezel{background:' + hsl(STAGES.slate[0], STAGES.slate[1], STAGES.slate[2]) + '!important}\n';
     return css;
   }
@@ -1243,8 +1271,20 @@
   window.addEventListener('resize', function () { if (S.open) setTimeout(placeHud, 160); });
 
   // ---------------------------------------------------------------- after each panel build
-  // There is no Lab key on the screen any more (2026-10-24): the Lab opens only from the address (#lab, #tune=...).
-  window.onPanelBuilt = function () { if (ui.bezel) placeHud(); };
+  // There is no Lab key on the screen any more (2026-10-24): the Lab opens only from the address (#lab, #tune=...). In its
+  // place, the Keys key steps through the header-key colour variants (KEYV), naming the one on show.
+  window.onPanelBuilt = function () {
+    if (!ui.bezel) return;
+    var label = function () { return 'Keys ' + (keyVar + 1) + '/' + KEYV.length; };
+    var k = ui.keysKey = key(ui.bezel[0] + 14, ui.bezel[1] + 14, textW('Keys 8/8', 9 * UL, 700, 0.08) + 18 * UL, 22 * UK, label(), null, { fs: 9 * UL, onClick: function () {
+      keyVar = (keyVar + 1) % KEYV.length;
+      try { localStorage.setItem('vfv-keys-var', String(keyVar)); } catch (e) { /* not kept */ }
+      apply(); k.txt.textContent = label(); aria(); flashTip(k.b, label() + ': ' + KEYV[keyVar].name);
+    } });
+    var aria = function () { k.b.setAttribute('aria-label', 'Header key colours: ' + KEYV[keyVar].name + ', ' + (keyVar + 1) + ' of ' + KEYV.length + ' (tap for the next)'); };
+    aria(); k.b.style.zIndex = '5';
+    placeHud();
+  };
 
   // ---------------------------------------------------------------- start
   load();

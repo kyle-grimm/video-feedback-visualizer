@@ -1139,3 +1139,24 @@ apart (Red, Orange, Yellow) a band now reaches 56% of its gain (was 79%); halfwa
 ## 39. Colors EQ bands narrowed again (2026-10-24)
 `EQ_WIDTH_DEG` is now ±9° (was ±14°). Halfway between bands 30° apart a band reaches 25% of its gain; between bands
 60° apart, under 1%: each fader now acts on its own colour only.
+
+## 40. Header-key colour variants (experimental, 2026-10-25)
+A **Keys n/8** key at the screen's top left (where the Lab key was, so no row or window grows) steps through eight
+colour variants of the header keys; the choice is kept in localStorage `vfv-keys-var`. Constraints:
+- Record stays red and Freeze a blue.
+- Main/Mod and Presets are each a purple, yellow or green.
+- The Day/Night key keeps its black / white (the other scheme's colours).
+Variants (lab.js `KEYV`; finishes from `skinCss`):
+
+| # | name | finish | Mod | Freeze | Presets | Record |
+|---|---|---|---|---|---|---|
+| 1 | Bright (the §34 colours) | glossy solid | green | blue | yellow | red |
+| 2 | Royal | glossy solid | purple | royal blue | gold | red |
+| 3 | Pastel | glossy solid, dark type | lavender | powder blue | sage | coral red |
+| 4 | Anodized | glossy solid, deep | deep purple | navy | forest green | oxblood |
+| 5 | Outline | dark body, coloured rim and type | yellow | blue | purple | red |
+| 6 | LED | dark body, coloured light bar under the type | green | blue | yellow | red |
+| 7 | Neon | dark body, glowing type and halo | violet | electric blue | lime | red |
+| 8 | Synth | matte flat | mustard | teal blue | plum | red |
+
+The header keys now carry role classes (`hk-page`, `hk-freeze`, `hk-presets`, `hk-rec`) instead of colour names.
