@@ -56,22 +56,32 @@ var tipTimer = 0;
 function flashTip(target, text) { showTip(target, text); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 2200); }
 
 // Value <-> knob position (0..1), with optional log taper, exponential taper (exp > 0 gives the low end more of the
-// travel, exp < 0 the high end) and a snap point (e.g. Zoom snaps to 1, Rotate to 0).
-function taper(d, u) { var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? (Math.exp(k * u) - 1) / e : 1 - (Math.exp(k * (1 - u)) - 1) / e; }
-function untaper(d, f) { var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? Math.log(1 + f * e) / k : 1 - Math.log(1 + (1 - f) * e) / k; }
+// travel, exp < 0 the high end), centred taper (bi: the Transform and Color knobs, whose neutral value is mid-range,
+// spread the values near it over more of the travel around the top; a mirrored sinh, so the centre keeps a usable
+// slope) and a snap point (e.g. Zoom snaps to 1, Rotate to 0).
+var BI_K = 4;   // bi: the inner 10% of the range either side of the centre takes 43% of that side's travel (DESIGN.md §41)
+function taper(d, u) {
+  if (d.bi) return 0.5 + 0.5 * Math.sinh(BI_K * (2 * u - 1)) / Math.sinh(BI_K);
+  var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? (Math.exp(k * u) - 1) / e : 1 - (Math.exp(k * (1 - u)) - 1) / e;
+}
+function untaper(d, f) {
+  if (d.bi) return 0.5 + 0.5 * Math.asinh((2 * f - 1) * Math.sinh(BI_K)) / BI_K;
+  var k = Math.abs(d.exp), e = Math.exp(k) - 1; return d.exp > 0 ? Math.log(1 + f * e) / k : 1 - Math.log(1 + (1 - f) * e) / k;
+}
 function toV(d, x) {
   if (d.log) return Math.log(x / d.min) / Math.log(d.max / d.min);
   var f = clamp((x - d.min) / (d.max - d.min));
-  return d.exp ? untaper(d, f) : f;
+  return d.exp || d.bi ? untaper(d, f) : f;
 }
 // The value a double-click returns a knob to: 0, or no effect where 0 isn't the neutral value (1x for Zoom, Contrast,
 // Saturation and Osc Size; Mix for Blend Mode); the knob's minimum where 0 is out of range.
 function zeroOf(d) { return d.zero != null ? d.zero : d.snap != null ? d.snap : clamp(0, d.min, d.max); }
 function fromV(d, v) {
   v = clamp(v);
-  var x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp ? taper(d, v) : v) * (d.max - d.min);
+  var x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp || d.bi ? taper(d, v) : v) * (d.max - d.min);
   if (d.step) x = +(Math.round(x / d.step) * d.step).toFixed(6);
-  if (d.snap != null && Math.abs(x - d.snap) < 0.015 * (d.max - d.min)) x = d.snap;
+  // The snap zone is 1.5% of the range, or on a centred taper 1.5% of the travel (a range share would be ±19% of it).
+  if (d.snap != null && (d.bi ? Math.abs(v - toV(d, d.snap)) < 0.015 : Math.abs(x - d.snap) < 0.015 * (d.max - d.min))) x = d.snap;
   return clamp(x, d.min, d.max);
 }
 var steps = function (d) { var n = d.step ? Math.round((d.max - d.min) / d.step) + 1 : 0; return n && n <= 61 ? n : 0; };
@@ -235,7 +245,7 @@ var BLEND_NAMES = ['Darken', 'Mix', 'Add', 'Mult', 'Diff'];
 var sgn = function (v, n) { return (v > 0 ? '+' : '') + v.toFixed(n); };
 var deg = function (v) { return Math.round(v) + '°'; };
 var pct = function (v) { return Math.round(v * 100) + '%'; };
-// def: the starting value; zero: where a double-click returns the knob (see zeroOf); exp, log, snap: see toV / fromV.
+// def: the starting value; zero: where a double-click returns the knob (see zeroOf); exp, bi, log, snap: see toV / fromV.
 var PD = {
   // Feedback
   blendMode: { min: 0, max: 4, def: 1, zero: 1, step: 1, f: function (v) { return BLEND_NAMES[v]; } },
@@ -243,16 +253,16 @@ var PD = {
   feedback: { min: 0, max: 1, def: 0.94, step: 0.001, exp: -5, f: function (v) { return v.toFixed(3); } },   // half the travel above 0.92
   delay: { min: 0, max: RING_SIZE - 2, def: 0, step: 1, f: function (v) { return v < 0.5 ? 'Live' : v + (v === 1 ? ' frame' : ' frames'); } },
   // Transform (per frame)
-  zoom: { min: 0.8, max: 1.2, def: 1.012, step: 0.001, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
-  rotate: { min: -0.5, max: 0.5, def: 0.012, step: 0.001, snap: 0, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
-  translateX: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
-  translateY: { min: -0.04, max: 0.04, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v * 100, 2) + '%'; } },
-  hueDrift: { min: -0.1, max: 0.1, def: 0.01, step: 0.001, snap: 0, f: function (v) { return sgn(v * 360, 1) + '°'; } },
+  zoom: { min: 0.8, max: 1.2, def: 1.012, step: 0.0001, snap: 1, bi: true, f: function (v) { return v.toFixed(3) + '×'; } },
+  rotate: { min: -0.5, max: 0.5, def: 0.012, step: 0.0002, snap: 0, bi: true, f: function (v) { return sgn(v * 180 / Math.PI, 2) + '°'; } },
+  translateX: { min: -0.04, max: 0.04, def: 0, step: 0.0001, snap: 0, bi: true, f: function (v) { return sgn(v * 100, 2) + '%'; } },
+  translateY: { min: -0.04, max: 0.04, def: 0, step: 0.0001, snap: 0, bi: true, f: function (v) { return sgn(v * 100, 2) + '%'; } },
+  hueDrift: { min: -0.1, max: 0.1, def: 0.01, step: 0.0002, snap: 0, bi: true, f: function (v) { return sgn(v * 360, 2) + '°'; } },
   // Color
-  hue: { min: 0, max: 360, def: 0, step: 1, f: deg },
-  saturate: { min: 2 / 3, max: 4 / 3, def: 1.1, step: 0.005, snap: 1, f: function (v) { return v.toFixed(2) + '×'; } },
-  brightness: { min: -1 / 30, max: 1 / 30, def: 0, step: 0.0005, snap: 0, f: function (v) { return sgn(v, 3); } },
-  contrast: { min: 0.9, max: 1.1, def: 1.03, step: 0.0005, snap: 1, f: function (v) { return v.toFixed(3) + '×'; } },
+  hue: { min: -180, max: 180, def: 0, step: 0.5, snap: 0, bi: true, f: function (v) { return sgn(v, 1) + '°'; } },   // 0 at the top (was 0-360)
+  saturate: { min: 2 / 3, max: 4 / 3, def: 1.1, step: 0.001, snap: 1, bi: true, f: function (v) { return v.toFixed(3) + '×'; } },
+  brightness: { min: -1 / 30, max: 1 / 30, def: 0, step: 0.0001, snap: 0, bi: true, f: function (v) { return sgn(v, 4); } },
+  contrast: { min: 0.9, max: 1.1, def: 1.03, step: 0.0001, snap: 1, bi: true, f: function (v) { return v.toFixed(4) + '×'; } },
   // Chromakey (key colour as HSL)
   keyHue: { min: 0, max: 360, def: 120, step: 1, f: deg },
   keySat: { min: 0, max: 1, def: 1, step: 0.01, f: pct },
@@ -981,7 +991,7 @@ function lfoLive(i, anyDepth) {
 }
 function modValue(d, x, off) {
   var v = clamp(toV(d, x) + off);
-  x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp ? taper(d, v) : v) * (d.max - d.min);
+  x = d.log ? d.min * Math.pow(d.max / d.min, v) : d.min + (d.exp || d.bi ? taper(d, v) : v) * (d.max - d.min);
   if (steps(d)) x = Math.round(x / d.step) * d.step;
   return clamp(x, d.min, d.max);
 }
@@ -1867,8 +1877,8 @@ function savePresetNew() {
 function recallPresetById(id) {
   var p = loadPresets().filter(function (x) { return x.id === id; })[0];
   if (!p || !p.params) return;
-  // Values saved before a knob's range was narrowed are brought inside it.
-  Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = PD[k] && typeof p.params[k] === 'number' ? clamp(p.params[k], PD[k].min, PD[k].max) : p.params[k]; });
+  // Values saved before a knob's range was narrowed are brought inside it, and a Hue saved as 0-360 wraps to -180-180.
+  Object.keys(params).forEach(function (k) { if (k in p.params) params[k] = PD[k] && typeof p.params[k] === 'number' ? clamp(k === 'hue' && p.params[k] > 180 ? p.params[k] - 360 : p.params[k], PD[k].min, PD[k].max) : p.params[k]; });
   syncUI();
   presetsActive = id;
   renderPresets();

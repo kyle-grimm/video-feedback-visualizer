@@ -1160,3 +1160,23 @@ Variants (lab.js `KEYV`; finishes from `skinCss`):
 | 8 | Synth | matte flat | mustard | teal blue | plum | red |
 
 The header keys now carry role classes (`hk-page`, `hk-freeze`, `hk-presets`, `hk-rec`) instead of colour names.
+
+## 41. Centred taper on the Transform and Color knobs (2026-10-25)
+
+Kyle asked for the Transform and Color knobs to be exponential, with values between -0.1 and 0.1 taking more of the
+travel around the top. Every one of these knobs has its neutral value at mid-range (Zoom, Saturation and Contrast 1x;
+Rotate, Shift X/Y, Hue Drift, Hue and Brightness 0), so "-0.1 to 0.1" is read as the inner 10% of the range on either
+side of the centre. Their units differ (Hue Drift's whole range is ±0.1), so a literal ±0.1 wouldn't apply to all of them.
+
+- `bi: true` in `PD` selects a mirrored sinh taper, `0.5 + 0.5 sinh(k(2u - 1)) / sinh(k)` with `BI_K` = 4. The inner
+  ±10% of the range covers ±58° of the dial (it was ±13.5°), so it takes 43% of each side's travel. A sinh keeps a finite
+  slope at the centre (0.15 of linear), so the top of the knob still moves the value; a plain power curve goes flat there.
+- The steps are finer (e.g. Rotate 0.001 → 0.0002 rad), so rounding doesn't add a dead zone at the slow centre.
+- The snap to neutral is measured in knob travel (1.5%, about ±4°) instead of in range: 1.5% of the range would have
+  covered ±19% of the travel.
+- Hue moves from 0-360 to -180-180 so that 0 sits at the top like the rest of the row. Presets saved with a Hue above
+  180 wrap on recall, and the shader is unchanged (`fract` handles negative hues).
+- Some readouts gained a decimal to show the finer centre values: Brightness 4, Contrast 4, Saturation 3, Hue Drift 2.
+- LFOs modulate in knob travel (§ LFO engine), so on these knobs a shallow LFO set near the centre now moves the value
+  less, and the same depth further out moves it more.
+- For review: the strength (`BI_K`) is one constant; 3 gives 29% of the travel to the inner 10%, 5 gives 54%.
