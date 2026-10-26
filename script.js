@@ -151,12 +151,13 @@ function scaleCss(n) {
     'mask:radial-gradient(closest-side,transparent calc(100% - 6px),#000 calc(100% - 5px)),conic-gradient(from -137deg,#000 0deg 274deg,transparent 274deg);mask-composite:intersect;pointer-events:none';
 }
 // MS-20 knob centred on (x, y) bound to params[key] through definition PD[key]. o: fs, ticks, after, fam, range (px of
-// drag for the full sweep).
+// drag for the full sweep), pkey (a function giving the params key to use instead, read each time: the Trigger
+// window's knobs edit the selected trigger).
 // Parts carry knob-* classes (and the wrap data-fam) so design-mode colour schemes can restyle them.
 var syncers = [];
 function knob(x, y, size, label, key, o) {
   o = o || {};
-  var d = PD[key], R = size / 2 + 10, S = 2 * R;
+  var d = PD[key], R = size / 2 + 10, S = 2 * R, pk = o.pkey || function () { return key; };
   var wrap = el('div', at(x - R - 16, y - R, S + 32) + ';display:flex;flex-direction:column;align-items:center;pointer-events:none');
   wrap.className = 'knob'; if (o.fam) wrap.dataset.fam = o.fam;
   var ring = el('div', 'position:relative;flex:none;width:' + S + 'px;height:' + S + 'px;cursor:ns-resize;touch-action:none;pointer-events:auto', wrap);
@@ -171,10 +172,10 @@ function knob(x, y, size, label, key, o) {
   lab.className = 'knob-label';
   var k = {
     v: 0, R: R, steps: steps(d), def: toV(d, zeroOf(d)),
-    text: function () { return label + '  ' + d.f(params[key]); },
-    show: function (v) { k.v = v; ptr.style.transform = 'rotate(' + (-135 + v * 270) + 'deg)'; ring.setAttribute('aria-valuetext', d.f(params[key])); },
-    set: function (v) { var x = fromV(d, v); params[key] = x; k.show(k.steps ? toV(d, x) : clamp(v)); if (o.after) o.after(x); },
-    sync: function () { k.show(toV(d, params[key])); ring.setAttribute('aria-label', label); if (o.after) o.after(params[key]); }
+    text: function () { return label + '  ' + d.f(params[pk()]); },
+    show: function (v) { k.v = v; ptr.style.transform = 'rotate(' + (-135 + v * 270) + 'deg)'; ring.setAttribute('aria-valuetext', d.f(params[pk()])); },
+    set: function (v) { var x = fromV(d, v); params[pk()] = x; k.show(k.steps ? toV(d, x) : clamp(v)); if (o.after) o.after(x); },
+    sync: function () { k.show(toV(d, params[pk()])); ring.setAttribute('aria-label', label); if (o.after) o.after(params[pk()]); }
   };
   k.sync();
   dragValue(ring, k, o.range || 220);
@@ -283,6 +284,22 @@ for (var q = 0; q < LFO_N; q++) {
   PD['lfo' + q + 'Rate'] = { min: 0.02, max: 20, def: LFO_DEF.rate[q], log: true, step: 0.01, f: function (v) { return v.toFixed(2) + ' Hz'; } };
   PD['lfo' + q + 'Depth'] = { min: 0, max: 1, def: 0.3, step: 0.01, f: pct };
 }
+// Mod page (experimental): three triggers, each an ADSR envelope fired by its key (held = sustain) that moves a target
+// (one of the Main page's knobs) by Depth (a share of the knob's sweep, either way) at the envelope's peak. Each starts
+// on a different target and shape so the keys do something at once: a zoom punch, a hue swell, a rotation kick.
+var TRIG_N = 3, TRIG_DEF = [
+  { t: 'zoom', a: 0.01, d: 0.35, s: 0, r: 0.25, depth: 0.35 },
+  { t: 'hue', a: 0.6, d: 0.8, s: 0.6, r: 1.5, depth: 0.5 },
+  { t: 'rotate', a: 0.02, d: 0.5, s: 0.4, r: 0.8, depth: -0.3 }
+];
+var secs = function (v) { return v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s'; };
+for (q = 0; q < TRIG_N; q++) {
+  PD['trig' + q + 'A'] = { min: 0.005, max: 5, def: TRIG_DEF[q].a, log: true, step: 0.001, f: secs };
+  PD['trig' + q + 'D'] = { min: 0.01, max: 5, def: TRIG_DEF[q].d, log: true, step: 0.001, f: secs };
+  PD['trig' + q + 'S'] = { min: 0, max: 1, def: TRIG_DEF[q].s, step: 0.01, f: pct };
+  PD['trig' + q + 'R'] = { min: 0.01, max: 10, def: TRIG_DEF[q].r, log: true, step: 0.001, f: secs };
+  PD['trig' + q + 'Depth'] = { min: -1, max: 1, def: TRIG_DEF[q].depth, step: 0.01, snap: 0, f: function (v) { return (v > 0 ? '+' : '') + Math.round(v * 100) + '%'; } };
+}
 // Fixed generator settings that no longer have knobs.
 var FIXED = { frequency: 8, speed: 0.3, sync: 0.2, shapeSmoothing: 0.05, noiseSpeed: 0.2 };
 // Colors EQ (Advanced page): seven bands at fixed hues (EQ_HUES) and a fixed width (EQ_WIDTH_DEG, degrees: each bell's
@@ -292,6 +309,7 @@ var EQ_WIDTH_DEG = 9;
 var DEFAULTS = { chromakeyEnabled: false, mixX: 0.75, mixY: 0.75 };
 for (q = 0; q < EQ_N; q++) DEFAULTS['eqG' + q] = 1;
 for (q = 0; q < LFO_N; q++) DEFAULTS['lfo' + q + 'Target'] = '';   // a Main page knob's id, '' for none
+for (q = 0; q < TRIG_N; q++) DEFAULTS['trig' + q + 'Target'] = TRIG_DEF[q].t;
 Object.keys(PD).forEach(function (k) { DEFAULTS[k] = PD[k].def; });
 var params = Object.assign({}, DEFAULTS);
 // Camera layer state (not a preset parameter): facing 'user' (front, mirrored) or 'environment' (back).
@@ -357,15 +375,16 @@ var SECTIONS = {
   transform: { title: 'Transform', items: ['zoom', 'rotate', 'translateX', 'translateY', 'hueDrift'] },
   color: { title: 'Color', items: ['hue', 'saturate', 'brightness', 'contrast'] },
   layers: { title: 'Layers', items: ['camera', 'oscSize', 'noiseScale', 'shapeSides'] },
-  mix: { title: 'Mix', items: [] }
+  mix: { title: 'Trigger', items: [] }   // the Mod page's Trigger window (it held the XY pad, as Mix)
 };
 // Knobs an LFO can drive: every knob on the Main page.
 var LFO_TARGETS = {};
 Object.keys(SECTIONS).forEach(function (f) { SECTIONS[f].items.forEach(function (id) { if (PD[id]) LFO_TARGETS[id] = 1; }); });
-// The Mod page (internally 'adv'; experimental): the Colors hue EQ along the whole bottom; above it on the right, the
-// Modulation window (four LFOs over their four target keys, in the red Feedback family colours) and the Mix window (the
-// XY pad, in the green Chromakey family colours). The header key naming the other page switches; the choice is kept.
-// pickLfo >= 0 while the Main page is open to pick that LFO's target.
+// The Mod page (internally 'adv'; experimental), in the Main page's windows: the Colors hue EQ where Layers is, the
+// Modulation window (four LFOs with their target keys, in the red Feedback family colours) over Feedback and Chromakey,
+// and the Trigger window (three ADSR triggers, in the green Chromakey family colours) over Transform and Color. The
+// header key naming the other page switches; the choice is kept. pickLfo >= 0 while the Main page is open to pick a
+// target: LFO pickLfo, or trigger pickLfo - LFO_N.
 var page = 'main';
 try { if (localStorage.getItem('vfv-page') === 'adv') page = 'adv'; } catch (e) { /* main */ }
 var pickLfo = -1;
@@ -507,28 +526,26 @@ function buildPortraitPanel() {
 
   // Layers: the pad square against the right edge, the four layer controls in a 2 x 2 grid left of it.
   var ly = ky + kh + PG + tab, lay = [M, ly, LW, LOW_B - ly], pad = lay[3] - 2 * PG, sep = PG + tab;
+  // Right column: one vertical gap g shared by every window. Each window's controls are its section's items in rows
+  // of two (Feedback, Chromakey) or one (Transform, Color).
+  var rows = function (fam, n) { var it = SECTIONS[fam].items, out = []; for (var r = 0; r < it.length; r += n) out.push(it.slice(r, r + n)); return [fam, out]; };
+  var wins = [rows('feedback', 2), rows('chroma', 2), rows('transform', 1), rows('color', 1)];
+  var hs = wins.map(function (w) { return gridSize(w[1], ks); });
+  var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc];
+  var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
+  var g = (LOW_B - top0 - used) / stack.reduce(function (a, z) { return a + z.n + 1; }, 0);
+  var hOf = function (z) { return tab + z.h + (z.n + 1) * g; };
+  var y = top0, fb = [RX, y, RW, hOf(hs[0])];
+  y += fb[3] + sep; var ck = [RX, y, RW, hOf(hs[1])];
+  y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
   if (page === 'adv') {
-    // Advanced: Colors across the whole bottom, the Mix window square at the foot of the right column (level with the
-    // header keys), the LFO window above it.
-    var my = ly - sep - RW - tab;
-    buildAdvanced([M, ly, SW - 2 * M, LOW_B - ly], [RX, top0, RW, my - sep - top0], [RX, my, RW, RW + tab], PG);
+    // Mod page, in the Main page's windows: Colors EQ where Layers is, Modulation over Feedback and Chromakey, Trigger
+    // over Transform and Color (down to the foot).
+    buildAdvanced(lay, [RX, fb[1], RW, ck[1] + ck[3] - fb[1]], [RX, tr[1], RW, LOW_B - tr[1]], PG);
   } else {
     secBox(lay, 'Layers', 'layers');
     makePad(M + LW - PG - pad, ly + PG, pad);
     gridIn([M, ly, LW - PG - pad, lay[3]], [['camera', 'oscSize'], ['noiseScale', 'shapeSides']], 40 * UK, 'layers');
-
-    // Right column: one vertical gap g shared by every window. Each window's controls are its section's items in rows
-    // of two (Feedback, Chromakey) or one (Transform, Color).
-    var rows = function (fam, n) { var it = SECTIONS[fam].items, out = []; for (var r = 0; r < it.length; r += n) out.push(it.slice(r, r + n)); return [fam, out]; };
-    var wins = [rows('feedback', 2), rows('chroma', 2), rows('transform', 1), rows('color', 1)];
-    var hs = wins.map(function (w) { return gridSize(w[1], ks); });
-    var tc = hs[2].h > hs[3].h ? hs[2] : hs[3], stack = [hs[0], hs[1], tc];
-    var used = stack.reduce(function (a, z) { return a + tab + z.h; }, 0) + 2 * sep;
-    var g = (LOW_B - top0 - used) / stack.reduce(function (a, z) { return a + z.n + 1; }, 0);
-    var hOf = function (z) { return tab + z.h + (z.n + 1) * g; };
-    var y = top0, fb = [RX, y, RW, hOf(hs[0])];
-    y += fb[3] + sep; var ck = [RX, y, RW, hOf(hs[1])];
-    y += ck[3] + sep; var tr = [RX, y, RW / 2 - 8, LOW_B - y], co = [RX + RW / 2 + 8, y, RW / 2 - 8, LOW_B - y];
     [fb, ck, tr, co].forEach(function (b, k) {
       var fam = wins[k][0];
       secBox(b, SECTIONS[fam].title, fam);
@@ -605,10 +622,10 @@ function buildDefault(land) {
   for (var i = 0; i < kn; i++) rects.push([BEZ[1] + BEZ[3] + 6, BEZ[0] + 8 + i * (kh + kg), 48, kh]);
   makeKeys(rects, 9);
   if (page === 'adv') {
-    // Advanced: the portrait arrangement transposed. Colors runs the full height of the right edge, the LFO and Mix
-    // windows share the band along the bottom (Mix square, against Colors).
-    var eq = box(M, LOW_Y, 900 - 2 * M, LOW_B - LOW_Y), band = box(RX, 16, RW, LOW_Y - 32), mx = band[0] + band[2] - RW;
-    buildAdvanced(eq, [band[0], band[1], mx - 16 - band[0], RW], [mx, band[1], RW, RW], 16);
+    // Mod page, in the Main page's windows (as in portrait): Colors EQ where Layers is, Modulation over Feedback and
+    // Chromakey (rows 1-5 of buildRight), Trigger over Transform and Color (rows 6-10, out to the right edge).
+    var B = function (k) { return ROW_Y0 + ROW_P * k; };
+    buildAdvanced(box(M, LOW_Y, LW, LOW_B - LOW_Y), box(RX, B(0) + 8, RW, B(5) - B(0) - 16), box(RX, B(5) + 8, RW, B(10) - B(5) - 16), 16);
   } else { buildLayers(); buildMix(); buildRight(); }
   afterPanel();
 }
@@ -748,15 +765,133 @@ function buildRight() {
   if (page !== 'adv') makeSwatch(ck[0] + 116, ck[1] - 6);
 }
 
-// Advanced page: Colors (eq), the LFO window (lfo) and the Mix window holding the XY pad (mix), each [x, y, w, h] in
-// stage coordinates; m is the margin inside a window (below the nameplate at the top).
-function buildAdvanced(eq, lfo, mix, m) {
+// Mod page: Colors (eq), the LFO window (lfo) and the Trigger window (trig), each [x, y, w, h] in stage coordinates; m
+// is the margin inside a window (below the nameplate at the top).
+function buildAdvanced(eq, lfo, trig, m) {
   buildColorsEq(eq, m);
   buildLfo(lfo, m);
-  secBox(mix, 'Mix', 'chroma');
-  var tab = 9 * UL, s = Math.min(mix[2] - 2 * m, mix[3] - tab - 2 * m);
-  makePad(mix[0] + (mix[2] - s) / 2, mix[1] + tab + m + (mix[3] - tab - 2 * m - s) / 2, s);
+  buildTrigger(trig, m);
 }
+
+// Trigger window (Mod page; a prototype): three trigger keys along the top fire their envelopes (held = sustain;
+// Space or Enter on a focused key, or 1-3 on the keyboard) and select the one shown below: an Envelope screen (the
+// ADSR shape, and a dot riding it while it runs), Attack, Decay, Sustain, Release and Depth knobs, and a Target key
+// naming the knob it moves (tap it to pick one on the Main page). A key glows with its envelope's level, and its LED
+// marks the selected one. Tall window (portrait): keys, screen, then the knobs two to a row with Target beside Depth.
+// Wide window (landscape): keys across the top, the screen over Target on the left, the five knobs in a row.
+var trigSel = 0;
+var TRIG_KNOBS = [['A', 'Attack'], ['D', 'Decay'], ['S', 'Sustain'], ['R', 'Release'], ['Depth', 'Depth']];
+function buildTrigger(b, m) {
+  secBox(b, SECTIONS.mix.title, 'chroma');
+  ui.trigKeys = []; ui.trigKnobs = [];
+  var lab = 10 * UL + 3, kh = 28 * UK, g = 10 * UK;
+  var C = [b[0] + m, b[1] + 9 * UL + m * 0.6, b[2] - 2 * m, 0]; C[3] = b[1] + b[3] - m - C[1];
+  var padH = Math.min(46 * UK, C[3] * 0.16), pw = (C[2] - 2 * g) / 3;
+  for (var i = 0; i < TRIG_N; i++) makeTrigKey(i, C[0] + i * (pw + g), C[1], pw, padH);
+  var y = C[1] + padH + g, h = C[1] + C[3] - y;
+  var tk = function (j, x, yy, ks) {
+    var id = TRIG_KNOBS[j][0];
+    ui.trigKnobs.push(knob(x, yy, ks, TRIG_KNOBS[j][1], 'trig0' + id, { fam: 'chroma', pkey: function () { return 'trig' + trigSel + id; } }));
+  };
+  var ew = textW('Release', 10 * UL, 700, 0.1) + 6 * UK, ks, R;
+  if (C[2] > 1.6 * h) {   // wide: screen over Target on the left, the knobs in a row on the right
+    var lw = C[2] * 0.34, rw = C[2] - lw - g;
+    ks = lfoKnobSize(Math.min(rw / 5, ew + 20), h); R = ks / 2 + 10;
+    makeTrigScreen(C[0], y, lw, h - kh - g);
+    makeTrigTarget(C[0], y + h - kh, lw, kh);
+    var xs = spread(C[0] + lw + g, C[0] + C[2], [ew, ew, ew, ew, ew]);
+    for (var j = 0; j < 5; j++) tk(j, xs[j] + ew / 2, y + (h - lab) / 2, ks);
+  } else {   // tall: screen, then [Attack Decay] [Sustain Release] [Depth Target]
+    var sh = Math.min(h * 0.3, C[2] * 0.6);
+    ks = lfoKnobSize(Math.min(C[2] / 2, ew + 20), (h - sh - g) / 3 - g); R = ks / 2 + 10; ew = Math.max(ew, 2 * R);
+    makeTrigScreen(C[0], y, C[2], sh);
+    var ys = spread(y + sh, C[1] + C[3], [2 * R + lab, 2 * R + lab, 2 * R + lab]), cx = spread(C[0], C[0] + C[2], [ew, ew]);
+    for (j = 0; j < 5; j++) tk(j, cx[j % 2] + ew / 2, ys[Math.floor(j / 2)] + R, ks);
+    var tw = Math.min(C[2] / 2 - g / 2, ew + 40 * UK);
+    makeTrigTarget(cx[1] + ew / 2 - tw / 2, ys[2] + R - kh / 2, tw, kh);
+  }
+  syncers.push(syncTrig); syncTrig();
+}
+function makeTrigKey(i, x, y, w, h) {
+  var k = key(x, y, w, h, String(i + 1), 'off', { fs: 13 * UL, aria: 'Trigger ' + (i + 1) });
+  var on = function (e) { if (e.button) return; e.preventDefault(); try { k.b.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } trigOn(i); };
+  var off = function () { trigOff(i); };
+  k.b.addEventListener('pointerdown', on);
+  k.b.addEventListener('pointerup', off); k.b.addEventListener('pointercancel', off); k.b.addEventListener('lostpointercapture', off);
+  k.b.addEventListener('keydown', function (e) { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); trigOn(i); } });
+  k.b.addEventListener('keyup', function (e) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); trigOff(i); } });
+  k.shadow = k.b.style.boxShadow;
+  ui.trigKeys[i] = k;
+}
+function makeTrigScreen(x, y, w, h) { ui.trigScreen = glass(x, y, w, h, ''); }
+function makeTrigTarget(x, y, w, h) {
+  var k = key(x, y, w, h, '', 'off', { fs: 9 * UL, onClick: function () { pickLfo = LFO_N + trigSel; setPage('main'); } });
+  k.w = w; ui.trigTarget = k;
+}
+// Selecting a trigger: the knobs, screen and Target key show it.
+function trigSelect(i) {
+  if (trigSel === i) return;
+  trigSel = i;
+  (ui.trigKnobs || []).forEach(function (k) { k.sync(); });
+  syncTrig();
+}
+function syncTrig() {
+  (ui.trigKeys || []).forEach(function (k, i) { k.set(i === trigSel ? 'sel' : 'off'); });
+  var k = ui.trigTarget;
+  if (k) {
+    var t = trigLive(trigSel, true), name = t ? CONTROLS[t][0] : 'None', s = 'Target · ' + name, fs = 9 * UL;
+    fs = Math.min(fs, Math.floor(fs * (k.w - 14 * UK) / textW(s, fs, 700, 0.08) * 10) / 10);
+    k.txt.textContent = s; k.txt.style.fontSize = fs + 'px';
+    k.set(t ? 'mod' : 'off');
+    k.b.setAttribute('aria-label', 'Trigger ' + (trigSel + 1) + ' target: ' + name + '. Pick a knob on the Main page');
+  }
+  drawTrig();
+}
+// The envelope's outline in the screen, as [x, level] points: Attack, Decay and Release each up to a quarter of the
+// width by their knob's position, Sustain a fixed fifth. at(stage, p) is where the dot sits.
+function trigShape(i) {
+  var v = function (s) { return 0.04 + 0.21 * toV(PD['trig' + i + s], params['trig' + i + s]); };
+  var a = v('A'), d = v('D'), r = v('R'), sl = params['trig' + i + 'S'], x1 = a, x2 = x1 + d, x3 = x2 + 0.2, x4 = x3 + r;
+  return { a: a, d: d, r: r, s: sl, x: [0, x1, x2, x3, x4] };
+}
+function drawTrig() {
+  var G = ui.trigScreen; if (!G) return;
+  var i = trigSel, c = G.x, w = G.w, h = G.h, T = trigShape(i), st = trig[i], fs = Math.round(Math.min(h * 0.17, w * 0.09));
+  var x0 = w * 0.07, x1 = w * 0.93, y0 = h * 0.36, y1 = h * 0.9, X = function (f) { return x0 + f / T.x[4] * (x1 - x0); }, Y = function (l) { return y1 - l * (y1 - y0); };
+  c.clearRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(143,141,146,0.3)'; c.lineWidth = 2; c.beginPath(); c.moveTo(x0, y1); c.lineTo(x1, y1); c.stroke();
+  // the outline: a straight attack, curved decay and release (as the engine runs them)
+  c.save(); c.globalAlpha = trigLive(i) ? 1 : 0.5; c.beginPath(); c.moveTo(X(0), Y(0)); c.lineTo(X(T.x[1]), Y(1));
+  for (var k = 1; k <= 24; k++) { var p = k / 24; c.lineTo(X(T.x[1] + p * T.d), Y(T.s + (1 - T.s) * (1 - p) * (1 - p))); }
+  c.lineTo(X(T.x[3]), Y(T.s));
+  for (k = 1; k <= 24; k++) { p = k / 24; c.lineTo(X(T.x[3] + p * T.r), Y(T.s * (1 - p) * (1 - p))); }
+  c.strokeStyle = ICON_GREEN; c.lineWidth = Math.max(3, h * 0.022); c.lineJoin = 'round'; c.lineCap = 'round';
+  c.shadowColor = 'rgba(63,191,106,0.7)'; c.shadowBlur = 6; c.stroke(); c.restore();
+  // the dot: where the envelope is (release from below sustain rides the release curve at its own level)
+  if (st.st) {
+    var fx = st.st === 'a' ? st.lvl * T.x[1] : st.st === 'd' ? T.x[1] + Math.min(st.p, 1) * T.d : st.st === 's' ? T.x[2] + 0.1 : T.x[3] + Math.min(st.p, 1) * T.r;
+    c.shadowColor = P.accentGlow; c.shadowBlur = 8; c.fillStyle = P.accent;
+    c.beginPath(); c.arc(X(fx), Y(st.lvl), Math.max(5, h * 0.04), 0, TAU); c.fill(); c.shadowBlur = 0;
+  }
+  var t = trigLive(i, true), dp = params['trig' + i + 'Depth'];
+  c.font = '800 ' + fs + 'px "Barlow Semi Condensed", "Segoe UI", sans-serif';
+  c.textAlign = 'left'; c.fillStyle = P.inkMute; c.fillText(String(i + 1), x0, h * 0.07 + fs);
+  c.textAlign = 'right'; c.fillStyle = P.accent; c.fillText((t ? CONTROLS[t][0] + ' ' + PD['trig' + i + 'Depth'].f(dp) : 'No target').toUpperCase(), x1, h * 0.07 + fs);
+  G.g.setAttribute('aria-label', 'Trigger ' + (i + 1) + ' envelope');
+  // the keys glow with their envelopes' levels
+  (ui.trigKeys || []).forEach(function (K, j) {
+    var l = trig[j].lvl;
+    K.b.style.boxShadow = l > 0.003 ? K.shadow + ',0 0 ' + Math.round(4 + 14 * l) + 'px ' + Math.round(1 + 3 * l) + 'px ' + P.modGlow : K.shadow;
+    K.txt.style.color = l > 0.003 ? P.mod : ''; K.txt.style.textShadow = l > 0.003 ? '0 0 ' + Math.round(4 + 6 * l) + 'px ' + P.modGlow : '';
+  });
+}
+// 1-3 on the keyboard fire the triggers (on the Mod page or the Main page; not while typing, or with a modifier).
+document.addEventListener('keydown', function (e) {
+  var i = '123'.indexOf(e.key);
+  if (i < 0 || e.repeat || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '')) return;
+  trigOn(i, page !== 'adv');
+});
+document.addEventListener('keyup', function (e) { var i = '123'.indexOf(e.key); if (i >= 0) trigOff(i); });
 
 // Colors EQ (Advanced page): a seven-band EQ on saturation around the hue spectrum. The saturation multiplier at a hue
 // is 1 plus every band's (gain - 1) times its bell (a Gaussian of the hue distance over the width), clamped at 0; the
@@ -912,18 +1047,20 @@ function drawLfoWaves() {
   });
 }
 
-// Picking an LFO's target (the Main page with pickLfo >= 0): every knob that can be a target gets an orange ring to
-// tap (the LFO's current target filled), and a bar across the foot of the screen names the LFO, with Clear (no target)
-// and Cancel. Tapping a knob, Clear, Cancel, Escape or the Advanced tab goes back to the Advanced page.
+// Picking an LFO's or a trigger's target (the Main page with pickLfo >= 0): every knob that can be a target gets an
+// orange ring to tap (the current target filled), and a bar across the foot of the screen names the source, with Clear
+// (no target) and Cancel. Tapping a knob, Clear, Cancel, Escape or the Mod key goes back to the Mod page.
+function pickParam() { return pickLfo < LFO_N ? 'lfo' + pickLfo + 'Target' : 'trig' + (pickLfo - LFO_N) + 'Target'; }
+function pickName() { return pickLfo < LFO_N ? 'LFO ' + (pickLfo + 1) : 'Trigger ' + (pickLfo - LFO_N + 1); }
 function makePickRings() {
-  var cur = lfoLive(pickLfo, true);
+  var cur = params[pickParam()];
   Object.keys(ui.knobs || {}).forEach(function (id) {
     if (!LFO_TARGETS[id]) return;
     var K = ui.knobs[id], name = CONTROLS[id][0];
     var d = el('div', at(K.x - K.R, K.y - K.R, 2 * K.R, 2 * K.R) + ';box-sizing:border-box;border-radius:50%;z-index:4;cursor:pointer;touch-action:manipulation;' +
       'border:' + 3 * UK + 'px solid ' + P.mod + ';background:' + (id === cur ? 'rgba(255,154,60,0.38)' : 'rgba(255,154,60,0.07)') + ';box-shadow:0 0 ' + 12 * UK + 'px ' + P.modGlow + ',inset 0 0 ' + 8 * UK + 'px ' + P.modGlow);
     d.className = 'pick'; d.setAttribute('role', 'button'); d.tabIndex = 0;
-    d.setAttribute('aria-label', 'Make ' + name + ' the target of LFO ' + (pickLfo + 1));
+    d.setAttribute('aria-label', 'Make ' + name + ' the target of ' + pickName());
     d.addEventListener('click', function () { pickTarget(id); });
     d.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickTarget(id); } });
     d.addEventListener('pointerenter', function () { showTip(d, name); });
@@ -935,26 +1072,28 @@ function makePickBanner() {
   var bar = el('div', at(x, y, w, h) + ';box-sizing:border-box;z-index:5;display:flex;align-items:center;padding-left:' + 12 * UK + 'px;border-radius:6px;' +
     'background:rgba(12,12,15,0.82);box-shadow:0 0 0 2px ' + P.mod + ',0 0 14px ' + P.modGlow);
   bar.setAttribute('role', 'status');
-  el('span', PRINT(9 * UL, P.mod), bar, 'LFO ' + (pickLfo + 1) + ' target · tap a knob');
+  el('span', PRINT(9 * UL, P.mod), bar, pickName() + ' target · tap a knob');
   [['Cancel', function () { setPage('adv'); }], ['Clear', function () { pickTarget(''); }]].forEach(function (d, j) {
-    var k = key(x + w - pad - (j + 1) * kw - j * pad, y + (h - kh) / 2, kw, kh, d[0], null, { fs: 8 * UL, aria: d[0] === 'Clear' ? 'No target for LFO ' + (pickLfo + 1) : 'Cancel picking', onClick: d[1] });
+    var k = key(x + w - pad - (j + 1) * kw - j * pad, y + (h - kh) / 2, kw, kh, d[0], null, { fs: 8 * UL, aria: d[0] === 'Clear' ? 'No target for ' + pickName() : 'Cancel picking', onClick: d[1] });
     k.b.style.zIndex = '6';
   });
 }
 function pickTarget(id) {
   var i = pickLfo; if (i < 0) return;
-  params['lfo' + i + 'Target'] = id;
+  var name = pickName(), k;
+  params[pickParam()] = id;
   setPage('adv');
-  if (ui.lfoTarget && ui.lfoTarget[i]) flashTip(ui.lfoTarget[i].b, 'LFO ' + (i + 1) + ' → ' + (id ? CONTROLS[id][0] : 'none'));
+  k = i < LFO_N ? ui.lfoTarget && ui.lfoTarget[i] : ui.trigTarget;
+  if (k) flashTip(k.b, name + ' → ' + (id ? CONTROLS[id][0] : 'none'));
 }
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && pickLfo >= 0) setPage('adv'); });
-// On the Main page, an orange dot rides the scale of each knob an LFO drives, showing the value the frame is drawn
-// with (updated every frame by lfoUi).
+// On the Main page, an orange dot rides the scale of each knob an LFO or a trigger drives, showing the value the frame
+// is drawn with (updated every frame by lfoUi).
 function syncModDots() {
   Object.keys(ui.modDots || {}).forEach(function (id) { ui.modDots[id].remove(); });
   ui.modDots = {};
-  for (var i = 0; i < LFO_N; i++) {
-    var id = lfoLive(i), K = id && ui.knobs && ui.knobs[id];
+  for (var i = 0; i < LFO_N + TRIG_N; i++) {
+    var id = i < LFO_N ? lfoLive(i) : trigLive(i - LFO_N), K = id && ui.knobs && ui.knobs[id];
     if (!K || ui.modDots[id]) continue;
     var c = el('div', 'position:absolute;inset:0;pointer-events:none', K.ring), s = 10 * UK;
     el('div', 'position:absolute;left:50%;top:1px;width:' + s + 'px;height:' + s + 'px;margin-left:' + (-s / 2) + 'px;border-radius:50%;background:' + P.mod + ';box-shadow:0 0 8px ' + P.modGlow, c);
@@ -967,9 +1106,9 @@ function afterPanel() {
   syncers.push(syncModDots); syncModDots();
   if (pickLfo >= 0) { makePickRings(); makePickBanner(); }
 }
-// Per rendered frame: the waveform screens (Advanced page) or the modulation dots (Main page).
+// Per rendered frame: the waveform and envelope screens (Mod page) or the modulation dots (Main page).
 function lfoUi() {
-  if (page === 'adv') { drawLfoWaves(); return; }
+  if (page === 'adv') { drawLfoWaves(); drawTrig(); return; }
   for (var id in ui.modDots || {}) {
     var v = clamp(toV(PD[id], params[id]) + (lfoOff[id] || 0));
     ui.modDots[id].style.transform = 'rotate(' + (-135 + v * 270) + 'deg)';
@@ -995,6 +1134,35 @@ function modValue(d, x, off) {
   if (steps(d)) x = Math.round(x / d.step) * d.step;
   return clamp(x, d.min, d.max);
 }
+// Trigger envelopes, run with the same clock. st: '' idle, 'a' attack (a straight rise from wherever the level is, so
+// a retrigger never jumps), 'd' decay (a curve down to Sustain), 's' sustain (while held), 'r' release (a curve to 0
+// from the level at release; letting go during the attack or decay releases from there). p: progress through d or r.
+// The move is Depth x the level, in knob travel, added to any LFOs' on the same knob.
+var trig = [];
+for (q = 0; q < TRIG_N; q++) trig.push({ st: '', lvl: 0, p: 0, r0: 0, held: false });
+function trigLive(i, anyDepth) {
+  var t = params['trig' + i + 'Target'];
+  return t && LFO_TARGETS[t] && (anyDepth || params['trig' + i + 'Depth'] !== 0) ? t : '';
+}
+function trigOn(i, keepSel) {
+  var s = trig[i]; if (!s || s.held) return;
+  s.held = true; s.st = 'a';
+  if (!keepSel && page === 'adv') trigSelect(i);
+}
+function trigOff(i) {
+  var s = trig[i]; if (!s || !s.held) return;
+  s.held = false;
+  if (s.st) { s.st = 'r'; s.r0 = s.lvl; s.p = 0; }
+}
+function trigStep(dt) {
+  for (var i = 0; i < TRIG_N; i++) {
+    var s = trig[i], P_ = function (k) { return params['trig' + i + k]; };
+    if (s.st === 'a') { s.lvl += dt / P_('A'); if (s.lvl >= 1) { s.lvl = 1; s.st = 'd'; s.p = 0; } }
+    else if (s.st === 'd') { s.p += dt / P_('D'); var q1 = 1 - Math.min(s.p, 1); s.lvl = P_('S') + (1 - P_('S')) * q1 * q1; if (s.p >= 1) s.st = 's'; }
+    else if (s.st === 's') s.lvl = P_('S');
+    else if (s.st === 'r') { s.p += dt / P_('R'); var q2 = 1 - Math.min(s.p, 1); s.lvl = s.r0 * q2 * q2; if (s.p >= 1) { s.st = ''; s.lvl = 0; } }
+  }
+}
 function liveParams(t) {
   var i, id;
   if (t !== lfoT) {
@@ -1004,11 +1172,16 @@ function liveParams(t) {
       lfoPh[i] += dt * params['lfo' + i + 'Rate'];
       if (lfoPh[i] >= 1) { lfoPh[i] %= 1; lfoSH[i] = Math.random() * 2 - 1; }
     }
+    trigStep(dt);
   }
   var off = {}, any = false;
   for (i = 0; i < LFO_N; i++) {
     id = lfoLive(i);
     if (id) { off[id] = (off[id] || 0) + params['lfo' + i + 'Depth'] * 0.5 * lfoOut(i); any = true; }
+  }
+  for (i = 0; i < TRIG_N; i++) {
+    id = trigLive(i);
+    if (id && trig[i].lvl > 0) { off[id] = (off[id] || 0) + params['trig' + i + 'Depth'] * trig[i].lvl; any = true; }
   }
   lfoOff = off;
   if (!any) return params;

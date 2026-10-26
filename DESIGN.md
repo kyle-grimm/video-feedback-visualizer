@@ -1180,3 +1180,38 @@ side of the centre. Their units differ (Hue Drift's whole range is ±0.1), so a 
 - LFOs modulate in knob travel (§ LFO engine), so on these knobs a shallow LFO set near the centre now moves the value
   less, and the same depth further out moves it more.
 - For review: the strength (`BI_K`) is one constant; 3 gives 29% of the travel to the inner 10%, 5 gives 54%.
+
+## 42. Mod page in the Main page's windows; Trigger window (prototype, 2026-10-25)
+
+Kyle asked for three changes. Mix should run to the bottom of the page, with a narrower Colors EQ to make room.
+Modulation should match Feedback and Chromakey in length, and Mix should match Transform and Color. Mix becomes
+"Trigger": ADSR modulation of targeted parameters, fired from three keys at the top.
+
+**Layout.** The Mod page now reuses the Main page's window boxes in both orientations: Colors EQ takes Layers' place,
+Modulation spans Feedback and Chromakey, and Trigger spans Transform and Color. In portrait, Trigger runs to the foot
+of the right column, and the EQ sits under the header keys at the screen's width. Landscape is the transposed version:
+Trigger runs out to the right edge, and the EQ is the column beside the header keys. The XY pad leaves the Mod page;
+it's still on the Main page, in Layers.
+
+**Trigger.** There are three triggers, each with Attack (5 ms-5 s), Decay (10 ms-5 s), Sustain (0-100%), Release
+(10 ms-10 s), Depth (-100% to +100% of the target knob's sweep, snapping to 0) and a Target (any Main page knob,
+picked as for an LFO).
+- Pressing a key fires its trigger. Holding the key holds the sustain, and letting go starts the release. A retrigger
+  starts the attack from the current level, so the value never jumps. The attack is a straight rise; decay and release
+  are curves (quadratic ease-out).
+- Space or Enter on a focused key fires it, and so do 1-3 on the keyboard on either page. On the Main page, 1-3 fire
+  without changing the selection.
+- The move is Depth × level in knob travel, added to any LFO on the same knob, so the Main page's orange dots show
+  triggers too. Envelopes run on the render clock, like the LFOs, and so they stop during Freeze.
+- Each starts on a different target and shape so the keys do something at once: 1 is a zoom punch, 2 a hue swell,
+  3 a rotation kick in reverse.
+
+**Decisions for review**
+- *Selecting:* there's room for one envelope's controls, so pressing a key also selects that trigger for the editor
+  below: an envelope screen, five knobs and the Target key. The key's LED marks the selected trigger, and every key
+  glows orange with its envelope's level. The editor knobs follow the selection through a new `knob()` option,
+  `pkey`, so there's no rebuild (a rebuild while a key is held would lose the release).
+- *Arrangement:* in portrait, the knobs sit two to a row, with Target beside Depth. Seven words of label at 2× don't
+  fit in one row. In landscape, the five knobs share one row beside the screen, and there's some free height above and
+  below them. I left it free rather than stretch the screen or the knobs.
+- *Keyboard:* the digits 1-3 weren't used by anything else.
